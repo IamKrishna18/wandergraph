@@ -1,253 +1,174 @@
-import React, { useState } from 'react';
-import {
-  Star,
-  MapPin,
-  Clock,
-  Coins,
-  Network,
-  ExternalLink,
-  ShieldCheck,
-  AlertCircle,
-  Info,
-  Image as ImageIcon,
-  Camera,
-} from 'lucide-react';
-import { ScoredRecommendation } from '../types';
-import { getPhotoProxyUrl } from '../services/api';
+import { useState } from 'react';
+import { BookMarked, CircleHelp, Network, Radio, Sigma, Star, Wand2, type LucideIcon } from 'lucide-react';
+import { photoUrl } from '../api';
+import { GROUP_ICONS, GROUP_LABELS, typeLabel } from '../meta';
+import type { Reason, Recommendation } from '../types';
+import { FitChips, fitSummary } from './FitList';
 
-interface PlaceCardProps {
-  recommendation: ScoredRecommendation;
-  onExploreInGraph: (placeId: string) => void;
-  onViewDetails: (placeId: string) => void;
-}
-
-// Category fallback gradients and icons
-const CATEGORY_STYLES: Record<string, { bg: string; label: string }> = {
-  cafe: { bg: 'from-amber-900/40 to-orange-950/60', label: 'Cafe & Bakery' },
-  restaurant: { bg: 'from-rose-900/40 to-red-950/60', label: 'Dining & Cuisine' },
-  bar_nightlife: { bg: 'from-purple-900/40 to-indigo-950/60', label: 'Bar & Nightlife' },
-  culture_history: { bg: 'from-blue-900/40 to-slate-950/60', label: 'Heritage & Culture' },
-  nature_outdoors: { bg: 'from-emerald-900/40 to-teal-950/60', label: 'Parks & Nature' },
-  shopping: { bg: 'from-fuchsia-900/40 to-pink-950/60', label: 'Shopping & Market' },
+const SOURCE: Record<Reason['source'], { icon: LucideIcon; title: string }> = {
+  curated: { icon: BookMarked, title: "From WanderGraph's curated data" },
+  live: { icon: Radio, title: 'From live Google Places data' },
+  inferred: { icon: Wand2, title: 'Inferred from the place type, so treat it as a hint' },
+  computed: { icon: Sigma, title: 'Computed by WanderGraph' },
 };
 
-export const PlaceCard: React.FC<PlaceCardProps> = ({
-  recommendation,
-  onExploreInGraph,
-  onViewDetails,
-}) => {
-  const { place, explanation, matched_reasons, unverified_attributes, match_confidence, total_score } = recommendation;
-  const [imgError, setImgError] = useState(false);
+const CONFIDENCE = {
+  high: { label: 'Strong match', cls: 'bg-accent text-ink' },
+  moderate: { label: 'Good match', cls: 'bg-sand/15 text-sand' },
+  potential: { label: 'Worth a look', cls: 'bg-sand/10 text-sand-dim' },
+};
 
-  // Photo resolution
-  const photo = place.photos && place.photos.length > 0 ? place.photos[0] : null;
-  const photoUrl = photo
-    ? photo.proxy_url || getPhotoProxyUrl(photo.name)
-    : place.photo_reference;
-  const attribution = photo?.attributions && photo.attributions.length > 0 ? photo.attributions[0] : null;
+export function compactCount(n?: number | null): string {
+  if (!n) return '';
+  if (n >= 1000) return `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k`;
+  return String(n);
+}
 
-  // Price estimate resolution
-  const pe = place.price_estimate;
-  const currencySymbol = (pe?.currency || place.currency) === 'JPY' ? '¥' : '₹';
+interface Props {
+  rec: Recommendation;
+  rank: number;
+  feature?: boolean;
+  localityName?: string | null;
+  onOpen: (rec: Recommendation) => void;
+  onGraph: (nodeId: string) => void;
+}
 
-  // Category fallback style
-  const primaryTypeKey = (place.primary_type || '').toLowerCase();
-  const matchedCategory = Object.keys(CATEGORY_STYLES).find((k) => primaryTypeKey.includes(k)) || 'culture_history';
-  const categoryStyle = CATEGORY_STYLES[matchedCategory];
+export function PlaceCard({ rec, rank, feature = false, localityName, onOpen, onGraph }: Props) {
+  const { place } = rec;
+  const [broken, setBroken] = useState(false);
+  const photo = place.photos[0];
+  const src = photoUrl(photo?.proxy_url);
+  const credit = photo?.attributions[0]?.display_name;
+  const conf = CONFIDENCE[rec.match_confidence];
+  const GroupIcon = place.groups.length ? GROUP_ICONS[place.groups[0]] : undefined;
+  const groupLabel = place.groups.length ? GROUP_LABELS[place.groups[0]] : typeLabel(place.primary_type);
 
   return (
-    <div className="flex flex-col justify-between rounded-2xl bg-slate-900/70 border border-slate-800/80 hover:border-indigo-500/50 hover:bg-slate-900/90 transition-all duration-200 overflow-hidden shadow-lg group">
-      {/* 1. Photo Container with Lazy Loading & Attribution Overlay */}
-      <div className="relative h-44 w-full bg-slate-950 overflow-hidden">
-        {photoUrl && !imgError ? (
-          <img
-            src={photoUrl}
-            alt={place.name}
-            loading="lazy"
-            onError={() => setImgError(true)}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-          />
+    <article
+      className={`group relative flex flex-col overflow-hidden rounded-[22px] border border-sand/10 bg-river transition-[border-color,transform] duration-300 hover:-translate-y-0.5 hover:border-accent/50 ${
+        feature ? 'md:col-span-2 md:flex-row' : ''
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => onOpen(rec)}
+        className={`duotone relative block shrink-0 overflow-hidden text-left ${feature ? 'aspect-[16/10] md:aspect-auto md:w-[56%]' : 'aspect-[16/10]'}`}
+        aria-label={`Open details for ${place.name}`}
+      >
+        {src && !broken ? (
+          <img src={src} alt="" loading="lazy" onError={() => setBroken(true)} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]" />
         ) : (
-          <div className={`w-full h-full bg-gradient-to-br ${categoryStyle.bg} flex flex-col items-center justify-center p-4 text-center`}>
-            <ImageIcon className="w-8 h-8 text-slate-600 mb-1" />
-            <span className="text-xs font-semibold text-slate-400">{categoryStyle.label}</span>
+          <div className="relative flex h-full min-h-[180px] w-full items-end overflow-hidden bg-gradient-to-br from-river-3 via-river-2 to-ink">
+            <div className="rays absolute inset-[-40%] opacity-70" aria-hidden />
+            <div className="absolute -bottom-16 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-accent/40 blur-2xl" aria-hidden />
+            {GroupIcon && <GroupIcon className="absolute right-5 top-12 h-16 w-16 text-sand/15" aria-hidden />}
+            <span className="relative px-5 pb-4 font-display text-6xl leading-none text-sand/25">{place.name.slice(0, 1)}</span>
           </div>
         )}
-
-        {/* Top Floating Badges */}
-        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
-          {/* Category Tag */}
-          <span className="text-[10px] font-bold uppercase tracking-wider text-white bg-slate-950/80 backdrop-blur-md border border-slate-700/60 px-2 py-0.5 rounded-md pointer-events-auto">
-            {place.primary_type ? place.primary_type.replace(/_/g, ' ') : 'Landmark'}
-          </span>
-
-          <div className="flex items-center gap-1.5 pointer-events-auto">
-            {/* Match Confidence Badge */}
-            <span
-              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border backdrop-blur-md ${
-                match_confidence === 'high'
-                  ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
-                  : match_confidence === 'moderate'
-                  ? 'bg-indigo-950/80 text-indigo-300 border-indigo-700'
-                  : 'bg-slate-900/80 text-slate-400 border-slate-700'
-              }`}
-              title={`Match score: ${total_score}`}
-            >
-              {match_confidence.toUpperCase()} MATCH
-            </span>
-
-            {/* Star Rating */}
-            {place.rating !== undefined && place.rating !== null && (
-              <div className="flex items-center space-x-1 text-xs font-bold text-amber-300 bg-slate-950/80 backdrop-blur-md border border-amber-500/40 px-2 py-0.5 rounded-full">
-                <Star className="w-3 h-3 fill-amber-400" />
-                <span>{place.rating.toFixed(1)}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Bottom Photographer Attribution Overlay */}
-        {attribution && (
-          <div className="absolute bottom-1 right-2 max-w-[85%] text-[9px] text-slate-300 bg-slate-950/70 backdrop-blur-sm px-1.5 py-0.5 rounded truncate">
-            <span className="inline-flex items-center gap-1">
-              <Camera className="w-2.5 h-2.5 text-slate-400 shrink-0" />
-              <span>Photo:</span>
-              {attribution.uri ? (
-                <a
-                  href={attribution.uri}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline hover:text-white truncate"
-                >
-                  {attribution.display_name}
-                </a>
-              ) : (
-                <span className="truncate">{attribution.display_name}</span>
-              )}
-            </span>
-          </div>
+        <span className="absolute left-3 top-3 z-10 font-display text-3xl text-sand drop-shadow" aria-label={`Rank ${rank}`}>
+          {rank}
+        </span>
+        {photo?.source === 'stock' && (
+          <span className="absolute right-3 top-3 z-10 rounded-full bg-ink/70 px-2 py-0.5 text-[11px] text-sand-dim">Representative photo</span>
         )}
-      </div>
+      </button>
 
-      {/* 2. Place Details & Metadata */}
-      <div className="p-4 flex-1 flex flex-col justify-between">
-        <div>
-          {/* Locality Tag & City */}
-          <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-1">
-            <MapPin className="w-3 h-3 text-indigo-400 shrink-0" />
-            {place.locality ? (
-              <span className="font-semibold text-indigo-300">
-                {place.locality}
-                <span className="text-slate-400 font-normal">, {place.city.toUpperCase()}</span>
-              </span>
-            ) : (
-              <span className="line-clamp-1">{place.formatted_address || place.city.toUpperCase()}</span>
-            )}
-          </div>
-
-          {/* Place Title */}
-          <h3 className="text-base font-bold text-white group-hover:text-indigo-300 transition duration-150 line-clamp-1">
-            {place.name}
-          </h3>
-
-          {/* Price & Budget Breakdown (Local Currency ₹ / ¥) */}
-          <div className="mt-2.5 py-2 px-3 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between text-xs">
-            <div className="flex items-center gap-1.5">
-              <Coins className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              {pe ? (
-                pe.is_free ? (
-                  <span className="font-bold text-emerald-400">Free Admission</span>
-                ) : pe.estimate_type === 'unknown' ? (
-                  <span className="text-slate-400 italic text-[11px]" title={pe.methodology_note}>
-                    Price unverified
-                  </span>
-                ) : (
-                  <div>
-                    <span className="font-semibold text-emerald-400">{pe.spending_range_text}</span>
-                    {pe.admission_text && pe.admission_text !== pe.spending_range_text && (
-                      <span className="text-[10px] text-slate-400 block truncate max-w-[200px]" title={pe.admission_text}>
-                        {pe.admission_text}
-                      </span>
-                    )}
-                  </div>
-                )
-              ) : place.approx_cost !== undefined && place.approx_cost !== null ? (
-                <span className="font-semibold text-emerald-400">
-                  {place.approx_cost === 0 ? 'Free Admission' : `~${currencySymbol}${place.approx_cost.toLocaleString()}`}
+      <div className="flex min-w-0 flex-1 flex-col gap-3 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm text-accent">{groupLabel}</p>
+            <h3 className={`font-display text-sand ${feature ? 'text-3xl' : 'text-2xl'}`}>
+              <button type="button" onClick={() => onOpen(rec)} className="text-left hover:text-accent">
+                {place.name}
+              </button>
+            </h3>
+            <p className="text-sm text-sand-dim">
+              {place.locality}
+              {localityName && rec.distance_from_locality_km != null && place.locality?.toLowerCase() !== localityName.toLowerCase() && (
+                <span className={rec.in_locality ? 'text-jal' : 'text-saffron'}>
+                  {place.locality ? ', ' : ''}
+                  {rec.distance_from_locality_km < 0.1 ? `in ${localityName}` : `${rec.distance_from_locality_km.toFixed(1)} km from ${localityName}`}
                 </span>
-              ) : (
-                <span className="text-slate-400 italic text-[11px]">Price unverified</span>
               )}
-            </div>
-
-            {/* Opening Hours */}
-            {place.opening_hours_text && (
-              <div className="flex items-center gap-1 text-[11px] text-slate-400 shrink-0 max-w-[120px] truncate" title={place.opening_hours_text}>
-                <Clock className="w-3 h-3 text-slate-400 shrink-0" />
-                <span className="truncate">{place.opening_hours_text}</span>
-              </div>
-            )}
+            </p>
           </div>
-
-          {/* Explainable Recommendation Banner */}
-          <div className="mt-2.5 p-2.5 rounded-xl bg-indigo-950/30 border border-indigo-500/20 text-xs">
-            <div className="flex items-start gap-1.5 text-indigo-200 text-[11px] leading-relaxed">
-              <Info className="w-3 h-3 text-indigo-400 shrink-0 mt-0.5" />
-              <p className="line-clamp-2">{explanation}</p>
-            </div>
-
-            {/* Matched Tags */}
-            {matched_reasons.length > 0 && (
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {matched_reasons.slice(0, 3).map((reason, idx) => (
-                  <span
-                    key={idx}
-                    className="text-[9px] font-medium text-emerald-300 bg-emerald-950/60 border border-emerald-800/40 px-1.5 py-0.5 rounded"
-                  >
-                    ✓ {reason}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Unverified attributes disclaimer */}
-            {unverified_attributes.length > 0 && (
-              <div className="mt-1 flex items-center gap-1 text-[9px] text-amber-400/90 truncate">
-                <AlertCircle className="w-2.5 h-2.5 text-amber-400 shrink-0" />
-                <span className="truncate">{unverified_attributes.join(' • ')}</span>
-              </div>
-            )}
-          </div>
+          <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${conf.cls}`}>{conf.label}</span>
         </div>
 
-        {/* 3. Card Footer with Provenance & Action Buttons */}
-        <div className="mt-3 pt-2.5 border-t border-slate-800/60 flex items-center justify-between">
-          <div className="flex items-center gap-1 text-[10px] text-slate-400">
-            <ShieldCheck className="w-3 h-3 text-indigo-400" />
-            <span className="truncate max-w-[120px]" title={place.provenance?.source || 'Verified Source'}>
-              {place.provenance?.source || 'Verified Source'}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+          {place.rating != null && (
+            <span className="inline-flex items-center gap-1 text-sand">
+              <Star className="h-4 w-4 fill-saffron text-saffron" aria-hidden />
+              {place.rating.toFixed(1)}
+              {place.user_ratings_total ? <span className="text-sand-faint">({compactCount(place.user_ratings_total)})</span> : null}
             </span>
-          </div>
+          )}
+          {place.price_estimate && (
+            <span className="text-sand-dim" title={place.price_estimate.methodology_note}>
+              {place.price_estimate.spending_range_text}
+            </span>
+          )}
+          {place.is_open_now != null && (
+            <span className={place.is_open_now ? 'text-jal' : 'text-ember'}>{place.is_open_now ? 'Open now' : 'Closed now'}</span>
+          )}
+        </div>
 
-          <div className="flex items-center space-x-1.5">
-            <button
-              onClick={() => onExploreInGraph(place.id)}
-              className="px-2 py-1 rounded-lg bg-indigo-950/60 hover:bg-indigo-900 border border-indigo-800/60 text-indigo-300 hover:text-white text-[11px] font-medium transition flex items-center gap-1"
-              title="Inspect node in Knowledge Graph"
-            >
-              <Network className="w-3 h-3" />
-              <span>Graph</span>
-            </button>
-            <button
-              onClick={() => onViewDetails(place.id)}
-              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-[11px] font-medium transition flex items-center gap-1"
-            >
-              <span>Details</span>
-              <ExternalLink className="w-3 h-3" />
+        {rec.fit.length > 0 && (
+          <div className="rounded-xl bg-ink/50 p-3">
+            <p className="mb-2 text-xs font-semibold text-sand-dim">{fitSummary(rec.fit)}</p>
+            <FitChips fit={rec.fit} max={feature ? 6 : 4} />
+          </div>
+        )}
+        {rec.fit.length === 0 && rec.reasons.length > 0 && (
+          <ul className="flex flex-wrap gap-1.5" aria-label="Why it matches">
+            {rec.reasons.map((r) => {
+              const S = SOURCE[r.source];
+              return (
+                <li key={r.text} title={S.title} className="inline-flex items-center gap-1 rounded-md bg-ink/60 px-2 py-1 text-sm text-sand">
+                  <S.icon className="h-3 w-3 text-accent" aria-hidden />
+                  {r.text}
+                  <span className="sr-only">({S.title})</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {rec.fit.length === 0 && rec.unverified_attributes.length > 0 && (
+          <p className="flex items-center gap-1 text-xs text-sand-faint">
+            <CircleHelp className="h-3.5 w-3.5" aria-hidden /> Not confirmed: {rec.unverified_attributes.join(', ').toLowerCase()}
+          </p>
+        )}
+        {feature && place.formatted_address && <p className="text-sm text-sand-faint">{place.formatted_address}</p>}
+
+        <div className="mt-auto flex items-center justify-between gap-2 pt-1">
+          <span className="truncate text-[11px] text-sand-faint" title={credit}>
+            {credit ? `Photo: ${credit}` : ''}
+          </span>
+          <div className="flex shrink-0 gap-2">
+            {rec.graph_node_id && (
+              <button type="button" onClick={() => onGraph(rec.graph_node_id!)} className="btn-ghost px-3 py-1 text-xs" aria-label={`Show ${place.name} in the graph`}>
+                <Network className="h-3.5 w-3.5" aria-hidden /> Graph
+              </button>
+            )}
+            <button type="button" onClick={() => onOpen(rec)} className="btn-ghost px-3 py-1 text-xs">
+              Details
             </button>
           </div>
         </div>
+      </div>
+    </article>
+  );
+}
+
+export function SkeletonCard() {
+  return (
+    <div className="overflow-hidden rounded-[22px] border border-sand/10 bg-river" aria-hidden>
+      <div className="skeleton aspect-[16/10]" />
+      <div className="space-y-3 p-5">
+        <div className="skeleton h-3 w-24 rounded" />
+        <div className="skeleton h-6 w-3/4 rounded" />
+        <div className="skeleton h-3 w-1/2 rounded" />
       </div>
     </div>
   );
-};
+}
