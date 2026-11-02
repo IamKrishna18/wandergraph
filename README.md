@@ -4,14 +4,6 @@
 
 WanderGraph helps people discover places, activities, experiences, and destinations based on their progressive conversational preferences, budget, atmosphere, and intended companions across **Hyderabad**, **Bengaluru**, **Tokyo**, and **Kyoto**.
 
-![WanderGraph Architecture Overview](https://img.shields.io/badge/Architecture-NetworkX%20MultiDiGraph-6366f1)
-![Backend](https://img.shields.io/badge/Backend-FastAPI%20%7C%20Pydantic%20%7C%20HTTPX-10b981)
-![Frontend](https://img.shields.io/badge/Frontend-React%20%7C%20TypeScript%20%7C%20Tailwind%20%7C%20Cytoscape.js-3b82f6)
-![AI Itinerary](https://img.shields.io/badge/AI-Google%20Gemini%203.5%20Flash--Lite-orange)
-![Tests](https://img.shields.io/badge/Tests-24%20Pytest%20%7C%207%20Vitest%20Passing-emerald)
-![Deployment](https://img.shields.io/badge/Deploy-Vercel%20Ready-black)
-
----
 
 ## Key Features
 
