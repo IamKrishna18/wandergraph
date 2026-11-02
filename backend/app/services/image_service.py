@@ -1,5 +1,5 @@
 import asyncio
-from typing import List, Optional, Dict
+from typing import Any, Dict, List, Optional
 import httpx
 from app.services.places_provider import PlacePhoto, PhotoAttribution
 from app.utils.logging import logger
