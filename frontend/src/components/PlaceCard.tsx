@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { ArrowUpRight, BookMarked, CircleHelp, Network, Radio, Sigma, Sparkles, Star, Wand2, type LucideIcon } from 'lucide-react';
 import { useRelevantPhoto } from '../placeImage';
 import { GROUP_ICONS, GROUP_LABELS, typeLabel } from '../meta';
@@ -48,9 +47,8 @@ interface Props {
 
 export function PlaceCard({ rec, rank, feature = false, localityName, onOpen, onGraph }: Props) {
   const { place } = rec;
-  const [broken, setBroken] = useState(false);
   // only a photo of this exact place: Google's own, or a matching Wikipedia photo; never a category stock photo
-  const photo = useRelevantPhoto(place);
+  const [photo, photoBroken] = useRelevantPhoto(place);
   const src = photo?.src;
   const credit = photo ? (photo.kind === 'wikipedia' ? 'Wikimedia Commons' : photo.credit) : '';
   const conf = CONFIDENCE[rec.match_confidence];
@@ -72,8 +70,8 @@ export function PlaceCard({ rec, rank, feature = false, localityName, onOpen, on
       >
         {photo === undefined ? (
           <div className="skeleton h-full w-full" aria-hidden />
-        ) : src && !broken ? (
-          <img src={src} alt={`Photo of ${place.name}`} loading="lazy" onError={() => setBroken(true)} className="h-full w-full object-cover opacity-90 transition-[transform,opacity] duration-700 group-hover:scale-[1.03] group-hover:opacity-100" />
+        ) : src ? (
+          <img src={src} alt={`Photo of ${place.name}`} loading="lazy" onError={photoBroken} className="h-full w-full object-cover opacity-90 transition-[transform,opacity] duration-700 group-hover:scale-[1.03] group-hover:opacity-100" />
         ) : (
           <div className="dot-bg relative flex h-full w-full flex-col items-center justify-center gap-2 bg-river-2">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(255,106,61,0.12),transparent_55%)]" aria-hidden />

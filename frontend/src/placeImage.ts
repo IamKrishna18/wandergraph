@@ -104,9 +104,12 @@ export function wikiPageMatches(page: WikiPage, placeName: string, city: string)
     if (norm(base) !== norm(coreName(placeName))) return false;
   } else {
     if (!title.length) return false;
-    const shared = want.filter((w) => title.includes(w)).length;
-    // the article's name has to be about this place: most of its distinctive words appear in the place's name
-    if (shared === 0 || shared / title.length < 0.5 || shared / want.length < 0.5) return false;
+    const common = want.filter((w) => title.includes(w));
+    const shared = common.length;
+    // the article's name has to be about this place: most of its distinctive words appear in the place's name,
+    // and it covers most of ours, or shares a long, telling word ("ISKCON Hyderabad" for a long temple name)
+    const telling = common.some((w) => w.length >= 5);
+    if (shared === 0 || shared / title.length < 0.5 || (shared / want.length < 0.5 && !telling)) return false;
   }
 
   const text = norm(`${page.title} ${page.description ?? ''} ${page.extract ?? ''}`);
@@ -200,6 +203,7 @@ interface CommonsPage {
   title: string;
   index?: number;
   imageinfo?: { thumburl?: string; url?: string; mime?: string; descriptionurl?: string }[];
+  coordinates?: { dist?: number }[];
 }
 
 /** A geotagged Commons photo near the place whose file name names the place. */
@@ -214,8 +218,11 @@ export function pickCommonsPhoto(pages: CommonsPage[], placeName: string, city: 
     const file = pg.title.replace(/^File:/, '').replace(/\.[a-z0-9]+$/i, '');
     if (/logo|map|flag|locator|icon|seal|emblem|diagram|plan\b/i.test(file)) continue;
     const have = distinctive(file);
-    const shared = want.filter((w) => have.includes(w)).length;
-    if (shared / want.length >= 0.5) return { src: info.thumburl, credit: 'Wikimedia Commons', href: info.descriptionurl, kind: 'wikipedia' };
+    const common = want.filter((w) => have.includes(w));
+    const dist = pg.coordinates?.[0]?.dist ?? Infinity;
+    // most of the name in the file name, or one long telling word for a photo taken right there
+    const ok = common.length / want.length >= 0.5 || (common.some((w) => w.length >= 5) && dist <= 150);
+    if (ok) return { src: info.thumburl, credit: 'Wikimedia Commons', href: info.descriptionurl, kind: 'wikipedia' };
   }
   return null;
 }
@@ -231,9 +238,11 @@ async function findCommonsPhoto(placeName: string, city: string, coords: { latit
     ggsradius: '400',
     ggsnamespace: '6',
     ggslimit: '50',
-    prop: 'imageinfo',
+    prop: 'imageinfo|coordinates',
     iiprop: 'url|mime',
     iiurlwidth: '900',
+    codistancefrompoint: `${coords.latitude}|${coords.longitude}`,
+    colimit: '50',
   });
   const res = await fetch(`https://commons.wikimedia.org/w/api.php?${params}`);
   if (!res.ok) throw new Error(`Commons ${res.status}`);
@@ -256,7 +265,8 @@ export function findWikiPhoto(placeName: string, city: string, coords?: { latitu
     const core = coreName(placeName);
     const full = placeName.split('(')[0].trim();
     const cityName = CITY_NAME[city] ?? city;
-    for (const s of [...new Set([`${full} ${cityName}`, `${core} ${cityName}`, core])]) {
+    const lead = distinctive(core).sort((a, b) => b.length - a.length)[0];
+    for (const s of [...new Set([`${full} ${cityName}`, `${core} ${cityName}`, core, ...(lead ? [`${lead} ${cityName}`] : [])])]) {
       const hit = pickWikiPhoto(await queryWikipedia(s), placeName, city);
       if (hit) return hit;
     }
@@ -284,26 +294,43 @@ export interface PlaceForPhoto {
 }
 
 /** Best photo for a place: Google (attached or looked up), then Wikipedia / Commons, or nothing. */
-export async function resolvePlacePhoto(place: PlaceForPhoto): Promise<RelevantPhoto | null> {
-  const attached = place.photos?.find(isGooglePhoto);
-  if (attached) return fromGoogle(attached);
-  return (await findGooglePhoto(place.name, place.city, place.coordinates)) ?? findWikiPhoto(place.name, place.city, place.coordinates);
+export async function resolvePlacePhoto(place: PlaceForPhoto, opts: { skipGoogle?: boolean; noLookup?: boolean } = {}): Promise<RelevantPhoto | null> {
+  if (!opts.skipGoogle) {
+    const attached = place.photos?.find(isGooglePhoto);
+    if (attached) return fromGoogle(attached);
+    // each lookup is a paid Google search, so bulk previews (the graph) skip it
+    const looked = opts.noLookup ? null : await findGooglePhoto(place.name, place.city, place.coordinates);
+    if (looked) return looked;
+  }
+  return findWikiPhoto(place.name, place.city, place.coordinates);
 }
 
-/** React hook form of resolvePlacePhoto. `undefined` while looking, `null` when there is no matching photo. */
-export function useRelevantPhoto(place: PlaceForPhoto | null | undefined): RelevantPhoto | null | undefined {
+/**
+ * React hook form of resolvePlacePhoto. The photo is `undefined` while looking and `null` when there is none.
+ * Call `broken()` when the image fails to load: a failed Google photo falls back to Wikipedia / Commons.
+ */
+export function useRelevantPhoto(place: PlaceForPhoto | null | undefined): [RelevantPhoto | null | undefined, () => void] {
   const google = place?.photos?.find(isGooglePhoto);
-  const key = place ? `${place.city}|${place.name}|${google?.proxy_url ?? ''}` : '';
+  const [failed, setFailed] = useState<'none' | 'google' | 'all'>('none');
+  const base = place ? `${place.city}|${place.name}|${google?.proxy_url ?? ''}` : '';
+  const key = `${base}|${failed}`;
   const [state, setState] = useState<{ key: string; v: RelevantPhoto | null | undefined }>({ key: '', v: undefined });
+  useEffect(() => setFailed('none'), [base]);
   useEffect(() => {
     if (!place) return;
+    if (failed === 'all') {
+      setState({ key, v: null });
+      return;
+    }
     let live = true;
-    void resolvePlacePhoto(place).then((v) => live && setState({ key, v }));
+    void resolvePlacePhoto(place, { skipGoogle: failed === 'google' }).then((v) => live && setState({ key, v }));
     return () => {
       live = false;
     };
     // key captures everything that matters about place
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
-  return state.key === key ? state.v : undefined;
+  const photo = state.key === key ? state.v : undefined;
+  const broken = () => setFailed(photo?.kind === 'google' ? 'google' : 'all');
+  return [photo, broken];
 }

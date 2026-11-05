@@ -184,17 +184,12 @@ async def get_place_photo(
                 headers={"Cache-Control": "public, max-age=86400, s-maxage=86400"},
             )
 
-    # Fallback SVG placeholder if photo cannot be fetched
-    svg = f"""<svg width="{max_width}" height="{max_height}" xmlns="http://www.w3.org/2000/svg">
-        <rect width="100%" height="100%" fill="#1e293b"/>
-        <text x="50%" y="50%" fill="#94a3b8" font-family="sans-serif" font-size="20" text-anchor="middle" dy=".3em">
-            WanderGraph Place Photo
-        </text>
-    </svg>"""
+    # No image: answer 404 so the page can fall back to another photo source
+    # (a grey "WanderGraph Place Photo" placeholder used to be shown as if it were the photo)
     return Response(
-        content=svg,
-        media_type="image/svg+xml",
-        headers={"Cache-Control": "public, max-age=3600"},
+        content=b"",
+        status_code=404,
+        headers={"Cache-Control": "public, max-age=300"},
     )
 
 
@@ -290,6 +285,10 @@ async def get_place_details(place_id: str):
         details = await fallback.get_place_details(place_id)
 
     if not details:
+        google_error = getattr(provider, "last_error", None)
+        if place_id.startswith("gplaces:") and google_error:
+            # Google refused (quota used up, key problem, or outage): say so instead of "not found"
+            raise HTTPException(status_code=503, detail=f"Live details from Google are unavailable right now (Google answered {google_error}).")
         raise HTTPException(status_code=404, detail=f"Place not found: {place_id}")
 
     graph_attrs = graph_service.get_place_attributes(place_id)

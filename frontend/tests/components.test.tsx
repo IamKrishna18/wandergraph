@@ -4,6 +4,7 @@ import { resolveApiBase, photoUrl } from '../src/api';
 import { constraintChips, Understanding } from '../src/components/Controls';
 import { PlaceCard } from '../src/components/PlaceCard';
 import { Planner } from '../src/components/Planner';
+import { PlaceDrawer } from '../src/components/PlaceDrawer';
 import { place, prefs, rec } from './fixtures';
 import recorded from './api-recorded.json';
 
@@ -117,5 +118,20 @@ describe('Planner', () => {
     fireEvent.change(screen.getByLabelText('Describe your day'), { target: { value: 'evening in gion' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(screen.getByText(/no longer has this plan/)).toBeInTheDocument());
+  });
+});
+
+describe('PlaceDrawer', () => {
+  it('falls back to the search result when Google refuses the details call', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (u) =>
+      String(u).includes('/places/gplaces')
+        ? new Response(JSON.stringify({ detail: 'Live details from Google are unavailable right now (Google answered 429).' }), { status: 503 })
+        : new Response(JSON.stringify({ photos: [], query: { pages: [] } }), { status: 200 }),
+    );
+    const r = rec({ place: place({ id: 'gplaces:abc', name: 'ISKCON Temple', provenance: { source: 'Google Places API (New)', verification_status: 'source_returned' } }) });
+    render(<PlaceDrawer placeId="gplaces:abc" match={r} city="hyderabad" onClose={() => undefined} onOpen={() => undefined} onGraph={() => undefined} />);
+    expect(await screen.findByRole('heading', { name: 'ISKCON Temple' })).toBeInTheDocument();
+    expect(screen.getByText(/Google's full details aren't available right now/)).toBeInTheDocument();
+    expect(screen.queryByText(/Place not found/)).not.toBeInTheDocument();
   });
 });

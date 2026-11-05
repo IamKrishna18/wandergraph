@@ -101,3 +101,15 @@ describe('geotagged Commons photos', () => {
     expect(pickCommonsPhoto([file('File:Bawarchi.svg', 'image/svg+xml')], 'Bawarchi Restaurant', 'hyderabad')).toBeNull();
   });
 });
+
+describe('long official names', () => {
+  it('matches "ISKCON Hyderabad" for a long temple name, but not a loose article', () => {
+    expect(wikiPageMatches(page('ISKCON Hyderabad', 'ISKCON Hyderabad is a temple in Abids, Hyderabad.'), 'ISKCON-Sri Sri Radha Madanmohan Mandir', 'hyderabad')).toBe(true);
+    expect(wikiPageMatches(page('Paradise Food Court', 'A food court in Secunderabad.'), 'Paradise Biryani (Original)', 'hyderabad')).toBe(false);
+  });
+  it('accepts a one-word Commons match only for a photo taken right there', () => {
+    const f = (dist: number) => ({ title: 'File:Niloufer cafe front.jpg', index: 1, coordinates: [{ dist }], imageinfo: [{ thumburl: 'https://upload.wikimedia.org/n.jpg', mime: 'image/jpeg' }] });
+    expect(pickCommonsPhoto([f(60)], 'Cafe Niloufer Himayatnagar Branch Office', 'hyderabad')).not.toBeNull();
+    expect(pickCommonsPhoto([f(390)], 'Cafe Niloufer Himayatnagar Branch Office', 'hyderabad')).toBeNull();
+  });
+});

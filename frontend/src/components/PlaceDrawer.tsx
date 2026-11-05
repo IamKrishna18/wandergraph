@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Accessibility, Clock, Coins, ExternalLink, Globe, MapPin, Network, Phone, ShieldCheck, Star, X } from 'lucide-react';
 import { api } from '../api';
 import { useRelevantPhoto } from '../placeImage';
@@ -29,6 +29,9 @@ interface Props {
 export function PlaceDrawer({ placeId, match, localityName, city, onClose, onOpen, onGraph }: Props) {
   const [data, setData] = useState<{ place: Place; graph_connections: Record<string, any> } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [partial, setPartial] = useState(false);
+  const matchRef = useRef(match);
+  matchRef.current = match;
   const close = useCallback(() => onClose(), [onClose]);
   useEscape(Boolean(placeId), close);
 
@@ -37,22 +40,38 @@ export function PlaceDrawer({ placeId, match, localityName, city, onClose, onOpe
     let live = true;
     setData(null);
     setError(null);
+    setPartial(false);
     api
       .place(placeId)
       .then((d) => {
         if (!live) return;
+        const fromSearch = matchRef.current?.place.id === placeId ? matchRef.current.place : null;
         const place = toPlace(d.place, city);
+        // Google's details call leaves out a few things the search result has
+        if (fromSearch) {
+          place.locality ??= fromSearch.locality;
+          if (!place.photos.length) place.photos = fromSearch.photos;
+          place.is_open_now ??= fromSearch.is_open_now;
+        }
         const gc = d.graph_connections ?? {};
         setData({ place, graph_connections: { ...gc, graph_node_id: place.id.startsWith('gplaces:') ? null : `place:${place.id}` } });
       })
-      .catch((e) => live && setError((e as Error).message));
+      .catch((e) => {
+        if (!live) return;
+        // Google can refuse the details call (quota, outage); the search result still has the essentials
+        const fromSearch = matchRef.current?.place.id === placeId ? matchRef.current.place : null;
+        if (fromSearch) {
+          setData({ place: fromSearch, graph_connections: { graph_node_id: fromSearch.id.startsWith('gplaces:') ? null : `place:${fromSearch.id}` } });
+          setPartial(true);
+        } else setError((e as Error).message.startsWith('Live details') ? (e as Error).message : "Couldn't load this place right now. Please try again in a moment.");
+      });
     return () => {
       live = false;
     };
   }, [placeId, city]);
 
   // only a photo of this exact place: Google's own, or a matching Wikipedia photo
-  const photo = useRelevantPhoto(data?.place && placeId ? { name: data.place.name, city: data.place.city, photos: data.place.photos, coordinates: data.place.coordinates } : null);
+  const [photo, photoBroken] = useRelevantPhoto(data?.place && placeId ? { name: data.place.name, city: data.place.city, photos: data.place.photos, coordinates: data.place.coordinates } : null);
 
   if (!placeId) return null;
   const p = data?.place;
@@ -82,7 +101,7 @@ export function PlaceDrawer({ placeId, match, localityName, city, onClose, onOpe
           <>
             <div className="relative aspect-[16/9] shrink-0 bg-ink">
               {photo === undefined && <div className="skeleton h-full w-full" aria-hidden />}
-              {photo && <img src={photo.src} alt={`Photo of ${p.name}`} className="h-full w-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />}
+              {photo && <img src={photo.src} alt={`Photo of ${p.name}`} className="h-full w-full object-cover" onError={photoBroken} />}
               {photo === null && <div className="dot-bg h-full w-full bg-river-2" aria-hidden />}
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-river via-river/50 to-transparent" aria-hidden />
             </div>
@@ -109,6 +128,11 @@ export function PlaceDrawer({ placeId, match, localityName, city, onClose, onOpe
                   </p>
                 )}
                 {photo === null && <p className="mt-1 text-[11px] text-sand-faint">No photo of this place yet.</p>}
+                {partial && (
+                  <p className="mt-3 rounded-lg border border-saffron/25 bg-saffron/[0.06] px-3 py-2 text-xs text-sand-dim">
+                    Google's full details aren't available right now, so this shows what the search returned.
+                  </p>
+                )}
               </div>
 
               {match && match.fit.length > 0 && (

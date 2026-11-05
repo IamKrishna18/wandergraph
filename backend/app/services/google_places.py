@@ -45,6 +45,7 @@ class GooglePlacesService(PlacesProvider):
         else:
             self.api_key = api_key
         self.timeout = settings.request_timeout_seconds
+        self.last_error: Optional[int] = None
 
     def get_status(self) -> ProviderStatus:
         if not self.api_key or len(self.api_key.strip()) < 5:
@@ -360,7 +361,8 @@ class GooglePlacesService(PlacesProvider):
                     headers=self._headers(settings.places_details_field_mask),
                 )
                 if response.status_code != 200:
-                    logger.error(f"Google Places Details error: status {response.status_code}")
+                    logger.error(f"Google Places Details error: status {response.status_code}: {response.text[:160]}")
+                    self.last_error = response.status_code
                     return None
 
                 item = response.json()
@@ -487,7 +489,12 @@ class GooglePlacesService(PlacesProvider):
 
         if res.status_code != 200:
             logger.warning(f"Photo lookup for {name} returned {res.status_code}: {res.text[:160]}")
-            return [], f"google_status_{res.status_code}"
+            try:
+                status = (res.json().get("error") or {}).get("status") or ""
+            except Exception:
+                status = ""
+            # e.g. "google_status_429:RESOURCE_EXHAUSTED" when the key's quota is used up
+            return [], f"google_status_{res.status_code}" + (f":{status}" if status else "")
 
         places = res.json().get("places", [])
         if not places:
