@@ -17,7 +17,7 @@ export function loadPlacePhoto(id: string): Promise<NodePhoto | null> {
     p = api
       .place(key)
       // the same rule as the cards: a photo of this exact place, or none
-      .then((d) => resolvePlacePhoto({ name: d.place.name, city: d.place.city, photos: d.place.photos }))
+      .then((d) => resolvePlacePhoto({ name: d.place.name, city: d.place.city, photos: d.place.photos, coordinates: d.place.coordinates }))
       .then((ph) => (ph ? { src: ph.src, credit: ph.kind === 'wikipedia' ? 'Wikimedia Commons' : ph.credit } : null))
       .catch(() => {
         cache.delete(key);

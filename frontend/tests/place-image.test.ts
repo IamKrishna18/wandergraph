@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { coreName, findWikiPhoto, isGooglePhoto, isStockPhoto, pickWikiPhoto, resolvePlacePhoto, wikiPageMatches } from '../src/placeImage';
+import { coreName, findWikiPhoto, isGooglePhoto, isStockPhoto, pickCommonsPhoto, pickWikiPhoto, resolvePlacePhoto, wikiPageMatches } from '../src/placeImage';
 
 const photo = (file = 'Charminar_Hyderabad_1.jpg') => ({ thumbnail: { source: `https://upload.wikimedia.org/wikipedia/commons/thumb/x/${file}/900px-${file}` }, pageimage: file });
 const page = (title: string, extract: string, extra: Record<string, unknown> = {}) => ({ title, extract, ...photo(), ...extra });
@@ -55,16 +55,49 @@ describe('matching a Wikipedia article to a place', () => {
 });
 
 describe('resolving a photo', () => {
-  it('prefers Google, otherwise looks up Wikipedia, otherwise gives none', async () => {
+  const json = (x: unknown) => new Response(JSON.stringify(x), { status: 200 });
+
+  it('uses a Google photo already on the result', async () => {
     const g = await resolvePlacePhoto({ name: 'X', city: 'tokyo', photos: [{ name: 'places/a/photos/b', proxy_url: '/api/places/photo?name=places/a', attributions: [{ display_name: 'Aiko' }] }] });
     expect(g).toMatchObject({ kind: 'google', credit: 'Aiko on Google Maps' });
+  });
 
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ query: { pages: [page('Golconda Fort', 'A fortified citadel in Hyderabad, India.')] } }), { status: 200 }));
+  it('asks the backend to find the place on Google before trying Wikipedia', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (u) =>
+      String(u).includes('/places/photo-lookup')
+        ? json({ photos: [{ name: 'places/q/photos/1', proxy_url: '/api/places/photo?name=places/q/photos/1', attributions: [{ display_name: 'Meera' }] }], source: 'google', reason: 'ok' })
+        : json({ query: { pages: [] } }),
+    );
+    const p = await resolvePlacePhoto({ name: 'Qutb Shahi Tombs', city: 'hyderabad', coordinates: { latitude: 17.39, longitude: 78.39 }, photos: [{ name: 'mock_photos/q_1', proxy_url: 'https://images.unsplash.com/photo-1' }] });
+    expect(p).toMatchObject({ kind: 'google', credit: 'Meera on Google Maps' });
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain('/places/photo-lookup?name=Qutb+Shahi+Tombs&city=hyderabad&lat=17.39&lng=78.39');
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('wikipedia'))).toBe(false);
+  });
+
+  it('falls back to Wikipedia, then nothing', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (u) =>
+      String(u).includes('/places/photo-lookup')
+        ? json({ photos: [], source: null, reason: 'no_api_key' })
+        : json({ query: { pages: [page('Golconda Fort', 'A fortified citadel in Hyderabad, India.')] } }),
+    );
     const w = await resolvePlacePhoto({ name: 'Golconda Fort', city: 'hyderabad', photos: [{ name: 'mock_photos/hyd_golconda_1', proxy_url: 'https://images.unsplash.com/photo-1' }] });
     expect(w?.kind).toBe('wikipedia');
-    expect(String(fetchMock.mock.calls[0][0])).toContain('origin=*');
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('origin=*'))).toBe(true);
 
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ query: { pages: [] } }), { status: 200 }));
+    fetchMock.mockImplementation(async () => json({ query: { pages: [] } }));
     expect(await findWikiPhoto('Roastery Coffee House', 'hyderabad')).toBeNull();
+  });
+});
+
+describe('geotagged Commons photos', () => {
+  const file = (title: string, mime = 'image/jpeg', index = 1) => ({ title, index, imageinfo: [{ thumburl: `https://upload.wikimedia.org/x/${encodeURIComponent(title)}`, mime, descriptionurl: 'https://commons.wikimedia.org/wiki/x' }] });
+  it('keeps nearby photos whose file name names the place', () => {
+    expect(pickCommonsPhoto([file('File:Street scene 2019.jpg', 'image/jpeg', 1), file('File:Cafe Niloufer, Lakdikapul.jpg', 'image/jpeg', 2)], 'Cafe Niloufer Himayatnagar', 'hyderabad')?.src).toContain('Niloufer');
+  });
+  it('ignores unrelated, logo and map files', () => {
+    expect(pickCommonsPhoto([file('File:Hyderabad street.jpg')], 'Bawarchi Restaurant', 'hyderabad')).toBeNull();
+    expect(pickCommonsPhoto([file('File:Bawarchi logo.png', 'image/png')], 'Bawarchi Restaurant', 'hyderabad')).toBeNull();
+    expect(pickCommonsPhoto([file('File:Bawarchi.svg', 'image/svg+xml')], 'Bawarchi Restaurant', 'hyderabad')).toBeNull();
   });
 });

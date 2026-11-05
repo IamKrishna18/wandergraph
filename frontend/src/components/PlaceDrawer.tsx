@@ -52,7 +52,7 @@ export function PlaceDrawer({ placeId, match, localityName, city, onClose, onOpe
   }, [placeId, city]);
 
   // only a photo of this exact place: Google's own, or a matching Wikipedia photo
-  const photo = useRelevantPhoto(data?.place && placeId ? { name: data.place.name, city: data.place.city, photos: data.place.photos } : null);
+  const photo = useRelevantPhoto(data?.place && placeId ? { name: data.place.name, city: data.place.city, photos: data.place.photos, coordinates: data.place.coordinates } : null);
 
   if (!placeId) return null;
   const p = data?.place;

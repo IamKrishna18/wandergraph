@@ -198,6 +198,27 @@ async def get_place_photo(
     )
 
 
+@router.get("/places/photo-lookup")
+async def lookup_place_photos(
+    response: Response,
+    name: str = Query(..., min_length=2, max_length=160, description="Place name"),
+    city: str = Query(..., min_length=2, max_length=40),
+    lat: Optional[float] = Query(default=None, ge=-90, le=90),
+    lng: Optional[float] = Query(default=None, ge=-180, le=180),
+):
+    """
+    Google photos for a place found by name (and position), so curated places can show
+    real photos of themselves. Photos are served through /places/photo, keeping the key secret.
+    """
+    if not settings.has_google_places_key:
+        response.headers["Cache-Control"] = "public, max-age=600"
+        return {"photos": [], "source": None, "reason": "no_api_key"}
+    photos, reason = await GooglePlacesService().find_place_photos(name=name, city=city.lower(), lat=lat, lng=lng)
+    # found photos are stable for a day; misses are retried sooner
+    response.headers["Cache-Control"] = "public, max-age=3600, s-maxage=86400" if photos else "public, max-age=600, s-maxage=1800"
+    return {"photos": [p.model_dump() if hasattr(p, "model_dump") else p.dict() for p in photos], "source": "google" if photos else None, "reason": reason}
+
+
 @router.post("/preferences/update")
 async def update_preferences(req: PreferenceUpdateRequest):
     """

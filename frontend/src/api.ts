@@ -171,6 +171,14 @@ export const api = {
   removePreference: (sessionId: string, field: string) =>
     request<{ preferences: RawPreferences }>(`/preferences/${encodeURIComponent(sessionId)}/field/${encodeURIComponent(field)}`, { method: 'DELETE' }),
   place: (id: string) => request<{ place: RawPlace; graph_connections: Record<string, any> }>(`/places/${encodeURIComponent(id)}`),
+  photoLookup: (name: string, city: string, lat?: number | null, lng?: number | null) => {
+    const q = new URLSearchParams({ name, city });
+    if (lat != null && lng != null) {
+      q.set('lat', String(lat));
+      q.set('lng', String(lng));
+    }
+    return request<{ photos: RawPlace['photos']; source: string | null; reason: string }>(`/places/photo-lookup?${q}`);
+  },
   graph: (city: string) => request<GraphData>(`/graph?city=${encodeURIComponent(city)}`),
   graphNode: (nodeId: string, depth = 1) => request<GraphData>(`/graph/node/${encodeURIComponent(nodeId)}?depth=${depth}`),
   itineraryMessage: (sessionId: string, message: string, city: string) =>

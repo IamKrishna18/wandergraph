@@ -1,15 +1,18 @@
 /**
- * Picks a photo that actually shows the place.
+ * Picks a photo that actually shows the place, best source first:
  *
- * 1. A Google Places photo (live data) is always of the place itself.
- * 2. Otherwise, look the place up on Wikipedia and use the article's lead image,
- *    but only if the article is clearly about this place: its title must match
- *    the place's name and its text must mention the city.
- * 3. Otherwise, show no photo. The backend's category stock photos
+ * 1. Google Places photos already attached to a live result.
+ * 2. Google Places, looked up by name and position through the backend
+ *    (so curated places get Google photos too; the key stays on the server).
+ * 3. Wikipedia: the article's lead image, only if the article is clearly about
+ *    this place (its title matches the name and its text mentions the city).
+ * 4. Wikimedia Commons: photos geotagged within a few hundred metres whose file
+ *    name mentions the place.
+ * 5. Otherwise no photo. The backend's category stock photos
  *    (the same picture for every monument, every cafe…) are never shown.
  */
 import { useEffect, useState } from 'react';
-import { photoUrl } from './api';
+import { api, photoUrl } from './api';
 
 export interface RelevantPhoto {
   src: string;
@@ -122,7 +125,7 @@ export function pickWikiPhoto(pages: WikiPage[], placeName: string, city: string
 }
 
 const memory = new Map<string, Promise<RelevantPhoto | null>>();
-const STORE = 'wg-wiki-photos-v1';
+const STORE = 'wg-wiki-photos-v2';
 const WEEK = 7 * 24 * 3600 * 1000;
 
 function readStore(): Record<string, { t: number; v: RelevantPhoto | null }> {
@@ -167,8 +170,79 @@ async function queryWikipedia(search: string): Promise<WikiPage[]> {
   return Array.isArray(pages) ? pages : Object.values(pages);
 }
 
-/** A Wikipedia photo of this exact place, or null. Cached for a week. */
-export function findWikiPhoto(placeName: string, city: string): Promise<RelevantPhoto | null> {
+function fromGoogle(p: PhotoLike): RelevantPhoto {
+  const a = p.attributions?.[0];
+  return { src: photoUrl(p.proxy_url)!, credit: a?.display_name ? `${a.display_name} on Google Maps` : 'Google Maps', href: a?.uri ?? undefined, kind: 'google' };
+}
+
+const googleMemory = new Map<string, Promise<RelevantPhoto | null>>();
+/** Ask the backend to find the place on Google and return its photo. */
+export function findGooglePhoto(name: string, city: string, coords?: { latitude: number; longitude: number } | null): Promise<RelevantPhoto | null> {
+  const key = `${city}|${norm(name)}`;
+  let p = googleMemory.get(key);
+  if (!p) {
+    p = api
+      .photoLookup(name, city, coords?.latitude, coords?.longitude)
+      .then((r) => {
+        const g = r.photos?.find(isGooglePhoto);
+        return g ? fromGoogle(g) : null;
+      })
+      .catch(() => {
+        googleMemory.delete(key);
+        return null;
+      });
+    googleMemory.set(key, p);
+  }
+  return p;
+}
+
+interface CommonsPage {
+  title: string;
+  index?: number;
+  imageinfo?: { thumburl?: string; url?: string; mime?: string; descriptionurl?: string }[];
+}
+
+/** A geotagged Commons photo near the place whose file name names the place. */
+export function pickCommonsPhoto(pages: CommonsPage[], placeName: string, city: string): RelevantPhoto | null {
+  const cityWords = CITY_WORDS[city] ?? [city];
+  const want = distinctive(coreName(placeName)).filter((w) => !cityWords.includes(w));
+  if (!want.length) return null;
+  const sorted = [...pages].sort((a, b) => (a.index ?? 999) - (b.index ?? 999));
+  for (const pg of sorted) {
+    const info = pg.imageinfo?.[0];
+    if (!info?.thumburl || !/^image\/(jpeg|png|webp)$/.test(info.mime ?? '')) continue;
+    const file = pg.title.replace(/^File:/, '').replace(/\.[a-z0-9]+$/i, '');
+    if (/logo|map|flag|locator|icon|seal|emblem|diagram|plan\b/i.test(file)) continue;
+    const have = distinctive(file);
+    const shared = want.filter((w) => have.includes(w)).length;
+    if (shared / want.length >= 0.5) return { src: info.thumburl, credit: 'Wikimedia Commons', href: info.descriptionurl, kind: 'wikipedia' };
+  }
+  return null;
+}
+
+async function findCommonsPhoto(placeName: string, city: string, coords: { latitude: number; longitude: number }): Promise<RelevantPhoto | null> {
+  const params = new URLSearchParams({
+    action: 'query',
+    format: 'json',
+    formatversion: '2',
+    origin: '*',
+    generator: 'geosearch',
+    ggscoord: `${coords.latitude}|${coords.longitude}`,
+    ggsradius: '400',
+    ggsnamespace: '6',
+    ggslimit: '50',
+    prop: 'imageinfo',
+    iiprop: 'url|mime',
+    iiurlwidth: '900',
+  });
+  const res = await fetch(`https://commons.wikimedia.org/w/api.php?${params}`);
+  if (!res.ok) throw new Error(`Commons ${res.status}`);
+  const data = await res.json();
+  return pickCommonsPhoto(data?.query?.pages ?? [], placeName, city);
+}
+
+/** Wikipedia first, then geotagged Commons photos. Cached for a week. */
+export function findWikiPhoto(placeName: string, city: string, coords?: { latitude: number; longitude: number } | null): Promise<RelevantPhoto | null> {
   const key = `${city}|${norm(placeName)}`;
   let p = memory.get(key);
   if (p) return p;
@@ -182,11 +256,11 @@ export function findWikiPhoto(placeName: string, city: string): Promise<Relevant
     const core = coreName(placeName);
     const full = placeName.split('(')[0].trim();
     const cityName = CITY_NAME[city] ?? city;
-    const searches = [...new Set([`${full} ${cityName}`, `${core} ${cityName}`, core])];
-    for (const s of searches) {
+    for (const s of [...new Set([`${full} ${cityName}`, `${core} ${cityName}`, core])]) {
       const hit = pickWikiPhoto(await queryWikipedia(s), placeName, city);
       if (hit) return hit;
     }
+    if (coords) return findCommonsPhoto(placeName, city, coords);
     return null;
   })()
     .then((v) => {
@@ -202,18 +276,22 @@ export function findWikiPhoto(placeName: string, city: string): Promise<Relevant
   return p;
 }
 
-/** Best photo for a place: Google's own, a matching Wikipedia photo, or nothing. */
-export async function resolvePlacePhoto(place: { name: string; city: string; photos?: PhotoLike[] }): Promise<RelevantPhoto | null> {
-  const google = place.photos?.find(isGooglePhoto);
-  if (google) {
-    const a = google.attributions?.[0];
-    return { src: photoUrl(google.proxy_url)!, credit: a?.display_name ? `${a.display_name} on Google Maps` : 'Google Maps', href: a?.uri ?? undefined, kind: 'google' };
-  }
-  return findWikiPhoto(place.name, place.city);
+export interface PlaceForPhoto {
+  name: string;
+  city: string;
+  photos?: PhotoLike[];
+  coordinates?: { latitude: number; longitude: number } | null;
+}
+
+/** Best photo for a place: Google (attached or looked up), then Wikipedia / Commons, or nothing. */
+export async function resolvePlacePhoto(place: PlaceForPhoto): Promise<RelevantPhoto | null> {
+  const attached = place.photos?.find(isGooglePhoto);
+  if (attached) return fromGoogle(attached);
+  return (await findGooglePhoto(place.name, place.city, place.coordinates)) ?? findWikiPhoto(place.name, place.city, place.coordinates);
 }
 
 /** React hook form of resolvePlacePhoto. `undefined` while looking, `null` when there is no matching photo. */
-export function useRelevantPhoto(place: { name: string; city: string; photos?: PhotoLike[] } | null | undefined): RelevantPhoto | null | undefined {
+export function useRelevantPhoto(place: PlaceForPhoto | null | undefined): RelevantPhoto | null | undefined {
   const google = place?.photos?.find(isGooglePhoto);
   const key = place ? `${place.city}|${place.name}|${google?.proxy_url ?? ''}` : '';
   const [state, setState] = useState<{ key: string; v: RelevantPhoto | null | undefined }>({ key: '', v: undefined });

@@ -413,3 +413,95 @@ class GooglePlacesService(PlacesProvider):
         except Exception as exc:
             logger.error(f"Error fetching place details for {place_id}: {exc}")
             return None
+
+    # ------------------------------------------------------------------
+    # Photo lookup for any named place (curated places have no Google ID)
+    # ------------------------------------------------------------------
+
+    _GENERIC_WORDS = {
+        "the", "of", "and", "a", "an", "in", "at", "temple", "shrine", "park", "garden", "gardens", "lake", "museum",
+        "palace", "fort", "market", "street", "road", "restaurant", "cafe", "coffee", "house", "bar", "pub", "hotel",
+        "centre", "center", "national", "district", "original", "city", "old", "new", "tower", "castle", "hall",
+    }
+
+    @classmethod
+    def _distinct_words(cls, text: str) -> List[str]:
+        import re
+        import unicodedata
+
+        clean = unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode().lower()
+        return [w for w in re.split(r"[^a-z0-9]+", clean) if len(w) > 1 and w not in cls._GENERIC_WORDS]
+
+    @classmethod
+    def _names_match(cls, wanted: str, found: str) -> bool:
+        """True when Google's name for a place is clearly the same place as ours."""
+        core = wanted.split("(")[0]
+        a = set(cls._distinct_words(core))
+        b = set(cls._distinct_words(found))
+        if not a or not b:
+            return (core or "").strip().lower() == (found or "").strip().lower()
+        shared = len(a & b)
+        return shared > 0 and shared / len(a) >= 0.5
+
+    @staticmethod
+    def _km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+        import math
+
+        r = 6371.0
+        p1, p2 = math.radians(lat1), math.radians(lat2)
+        dp, dl = p2 - p1, math.radians(lng2 - lng1)
+        h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+        return 2 * r * math.asin(math.sqrt(h))
+
+    async def find_place_photos(
+        self,
+        name: str,
+        city: str,
+        lat: Optional[float] = None,
+        lng: Optional[float] = None,
+        max_km: float = 3.0,
+    ) -> Tuple[List[PlacePhoto], str]:
+        """
+        Find a place on Google by name (and position, when known) and return its photos.
+        Returns (photos, reason); reason explains an empty result.
+        """
+        if not self.api_key:
+            return [], "no_api_key"
+
+        city_cap = (city or "").capitalize()
+        query = name if city_cap.lower() in name.lower() else f"{name}, {city_cap}"
+        payload: Dict[str, Any] = {"textQuery": query, "maxResultCount": 5}
+        if lat is not None and lng is not None:
+            payload["locationBias"] = {"circle": {"center": {"latitude": lat, "longitude": lng}, "radius": 2000.0}}
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                res = await client.post(
+                    settings.google_places_search_url,
+                    headers=self._headers("places.id,places.displayName,places.location,places.photos"),
+                    json=payload,
+                )
+        except Exception as exc:  # network trouble
+            logger.warning(f"Photo lookup failed for {name}: {exc}")
+            return [], "google_unreachable"
+
+        if res.status_code != 200:
+            logger.warning(f"Photo lookup for {name} returned {res.status_code}: {res.text[:160]}")
+            return [], f"google_status_{res.status_code}"
+
+        places = res.json().get("places", [])
+        if not places:
+            return [], "no_google_match"
+        for item in places:
+            found = (item.get("displayName") or {}).get("text", "")
+            if not self._names_match(name, found):
+                continue
+            loc = item.get("location") or {}
+            if lat is not None and lng is not None and "latitude" in loc:
+                if self._km(lat, lng, loc["latitude"], loc["longitude"]) > max_km:
+                    continue
+            photos = self._parse_photos(item.get("photos", []))
+            if photos:
+                return photos, "ok"
+            return [], "google_match_has_no_photos"
+        return [], "no_google_match"
