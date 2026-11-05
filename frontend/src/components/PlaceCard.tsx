@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowUpRight, BookMarked, CircleHelp, Network, Radio, Sigma, Sparkles, Star, Wand2, type LucideIcon } from 'lucide-react';
-import { photoUrl } from '../api';
+import { useRelevantPhoto } from '../placeImage';
 import { GROUP_ICONS, GROUP_LABELS, typeLabel } from '../meta';
 import type { FitItem, Reason, Recommendation } from '../types';
 import { FitChips, fitSummary } from './FitList';
@@ -49,9 +49,10 @@ interface Props {
 export function PlaceCard({ rec, rank, feature = false, localityName, onOpen, onGraph }: Props) {
   const { place } = rec;
   const [broken, setBroken] = useState(false);
-  const photo = place.photos[0];
-  const src = photoUrl(photo?.proxy_url);
-  const credit = photo?.attributions[0]?.display_name;
+  // only a photo of this exact place: Google's own, or a matching Wikipedia photo; never a category stock photo
+  const photo = useRelevantPhoto(place);
+  const src = photo?.src;
+  const credit = photo ? (photo.kind === 'wikipedia' ? 'Wikimedia Commons' : photo.credit) : '';
   const conf = CONFIDENCE[rec.match_confidence];
   const GroupIcon = (place.groups.length && GROUP_ICONS[place.groups[0]]) || Sparkles;
   const groupLabel = place.groups.length ? GROUP_LABELS[place.groups[0]] : typeLabel(place.primary_type);
@@ -69,26 +70,25 @@ export function PlaceCard({ rec, rank, feature = false, localityName, onOpen, on
         className={`relative block shrink-0 overflow-hidden bg-ink text-left ${feature ? 'aspect-[16/10] md:aspect-auto md:min-h-[320px] md:w-[52%]' : 'aspect-[16/9]'}`}
         aria-label={`Open details for ${place.name}`}
       >
-        {src && !broken ? (
-          <img src={src} alt="" loading="lazy" onError={() => setBroken(true)} className="h-full w-full object-cover opacity-90 transition-[transform,opacity] duration-700 group-hover:scale-[1.03] group-hover:opacity-100" />
+        {photo === undefined ? (
+          <div className="skeleton h-full w-full" aria-hidden />
+        ) : src && !broken ? (
+          <img src={src} alt={`Photo of ${place.name}`} loading="lazy" onError={() => setBroken(true)} className="h-full w-full object-cover opacity-90 transition-[transform,opacity] duration-700 group-hover:scale-[1.03] group-hover:opacity-100" />
         ) : (
-          <div className="dot-bg relative flex h-full w-full items-center justify-center bg-river-2">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(255,106,61,0.16),transparent_55%)]" aria-hidden />
-            <GroupIcon className="relative h-10 w-10 text-sand/20" strokeWidth={1.25} aria-hidden />
+          <div className="dot-bg relative flex h-full w-full flex-col items-center justify-center gap-2 bg-river-2">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(255,106,61,0.12),transparent_55%)]" aria-hidden />
+            <GroupIcon className="relative h-9 w-9 text-sand/20" strokeWidth={1.25} aria-hidden />
+            <span className="relative text-[11px] text-sand-faint">No photo of this place yet</span>
           </div>
         )}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-river/90 to-transparent" aria-hidden />
         <span className="absolute left-3 top-3 rounded-md border border-white/10 bg-ink/70 px-1.5 py-0.5 font-mono text-[11px] text-sand backdrop-blur" aria-label={`Rank ${rank}`}>
           {String(rank).padStart(2, '0')}
         </span>
-        {photo?.source === 'stock' ? (
-          <span className="absolute right-3 top-3 rounded-md bg-ink/70 px-1.5 py-0.5 text-[11px] text-sand-dim backdrop-blur">Representative photo</span>
-        ) : (
-          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-md bg-ink/70 px-1.5 py-0.5 text-[11px] text-sand-dim backdrop-blur">
-            {live ? <Radio className="h-3 w-3 text-jal" aria-hidden /> : <BookMarked className="h-3 w-3" aria-hidden />}
-            {live ? 'Google' : 'Curated'}
-          </span>
-        )}
+        <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-md bg-ink/70 px-1.5 py-0.5 text-[11px] text-sand-dim backdrop-blur">
+          {live ? <Radio className="h-3 w-3 text-jal" aria-hidden /> : <BookMarked className="h-3 w-3" aria-hidden />}
+          {live ? 'Google' : 'Curated'}
+        </span>
       </button>
 
       <div className="flex min-w-0 flex-1 flex-col gap-3.5 p-4 sm:p-5">

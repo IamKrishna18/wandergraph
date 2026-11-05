@@ -68,14 +68,16 @@ describe('PlaceCard', () => {
     rerender(<PlaceCard rec={rec({ graph_node_id: null })} rank={1} onOpen={() => undefined} onGraph={onGraph} />);
     expect(screen.queryByRole('button', { name: 'Show Charminar in the graph' })).not.toBeInTheDocument();
   });
-  it('labels stock photos and inferred reasons honestly', () => {
+  it('never shows a category stock photo, and labels inferred reasons honestly', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ query: { pages: [] } }), { status: 200 }));
     const r = rec({
-      place: place({ photos: [{ name: 'stock:heritage', proxy_url: 'https://images.unsplash.com/x', source: 'stock', attributions: [{ display_name: 'A / Unsplash' }] }] }),
+      place: place({ name: 'Somewhere Unlisted', photos: [{ name: 'mock_photos/x_1', proxy_url: 'https://images.unsplash.com/x', source: 'stock', attributions: [{ display_name: 'A / Unsplash' }] }] }),
       reasons: [{ text: 'Good for friends', source: 'inferred' }],
       fit: [],
     });
     render(<PlaceCard rec={r} rank={2} onOpen={() => undefined} onGraph={() => undefined} />);
-    expect(screen.getByText('Representative photo')).toBeInTheDocument();
+    expect(await screen.findByText('No photo of this place yet')).toBeInTheDocument();
+    expect(document.querySelector('img[src*="unsplash"]')).toBeNull();
     expect(screen.getByText(/Inferred from the place type/)).toBeInTheDocument();
   });
 });

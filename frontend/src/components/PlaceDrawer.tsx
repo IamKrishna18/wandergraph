@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Accessibility, Clock, Coins, ExternalLink, Globe, MapPin, Network, Phone, ShieldCheck, Star, X } from 'lucide-react';
-import { api, photoUrl } from '../api';
+import { api } from '../api';
+import { useRelevantPhoto } from '../placeImage';
 import { toPlace } from '../adapter';
 import { GROUP_LABELS } from '../meta';
 import { useEscape } from '../hooks';
@@ -50,10 +51,12 @@ export function PlaceDrawer({ placeId, match, localityName, city, onClose, onOpe
     };
   }, [placeId, city]);
 
+  // only a photo of this exact place: Google's own, or a matching Wikipedia photo
+  const photo = useRelevantPhoto(data?.place && placeId ? { name: data.place.name, city: data.place.city, photos: data.place.photos } : null);
+
   if (!placeId) return null;
   const p = data?.place;
   const g = data?.graph_connections ?? {};
-  const photo = p?.photos[0];
   const hours = p?.opening_hours_text?.split(/;\s*/).filter(Boolean) ?? [];
   const wheel = p?.accessibility.wheelchair_accessible_entrance;
   const attrSource = g.attribute_source === 'inferred' ? 'Inferred from the place type' : g.attribute_source ? 'From the curated knowledge graph' : null;
@@ -78,9 +81,9 @@ export function PlaceDrawer({ placeId, match, localityName, city, onClose, onOpe
         {p && (
           <>
             <div className="relative aspect-[16/9] shrink-0 bg-ink">
-              {photo?.proxy_url && (
-                <img src={photoUrl(photo.proxy_url)} alt="" className="h-full w-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
-              )}
+              {photo === undefined && <div className="skeleton h-full w-full" aria-hidden />}
+              {photo && <img src={photo.src} alt={`Photo of ${p.name}`} className="h-full w-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />}
+              {photo === null && <div className="dot-bg h-full w-full bg-river-2" aria-hidden />}
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-river via-river/50 to-transparent" aria-hidden />
             </div>
             <div className="-mt-16 space-y-6 p-6 pt-0">
@@ -93,18 +96,19 @@ export function PlaceDrawer({ placeId, match, localityName, city, onClose, onOpe
                     {p.formatted_address}
                   </p>
                 )}
-                {photo?.attributions[0] && (
+                {photo && (
                   <p className="mt-1 text-[11px] text-sand-faint">
                     Photo:{' '}
-                    {photo.attributions[0].uri ? (
-                      <a className="underline" href={photo.attributions[0].uri} target="_blank" rel="noreferrer">
-                        {photo.attributions[0].display_name}
+                    {photo.href ? (
+                      <a className="underline" href={photo.href} target="_blank" rel="noreferrer">
+                        {photo.credit}
                       </a>
                     ) : (
-                      photo.attributions[0].display_name
+                      photo.credit
                     )}
                   </p>
                 )}
+                {photo === null && <p className="mt-1 text-[11px] text-sand-faint">No photo of this place yet.</p>}
               </div>
 
               {match && match.fit.length > 0 && (

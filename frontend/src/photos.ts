@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api, photoUrl } from './api';
+import { api } from './api';
+import { resolvePlacePhoto } from './placeImage';
 
 export interface NodePhoto {
   src: string;
@@ -15,11 +16,9 @@ export function loadPlacePhoto(id: string): Promise<NodePhoto | null> {
   if (!p) {
     p = api
       .place(key)
-      .then((d) => {
-        const ph = d.place.photos?.[0];
-        const src = photoUrl(ph?.proxy_url);
-        return src ? { src, credit: ph?.attributions?.[0]?.display_name } : null;
-      })
+      // the same rule as the cards: a photo of this exact place, or none
+      .then((d) => resolvePlacePhoto({ name: d.place.name, city: d.place.city, photos: d.place.photos }))
+      .then((ph) => (ph ? { src: ph.src, credit: ph.kind === 'wikipedia' ? 'Wikimedia Commons' : ph.credit } : null))
       .catch(() => {
         cache.delete(key);
         return null;
