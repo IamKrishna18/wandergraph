@@ -27,6 +27,36 @@ PRICE_LEVEL_MAP = {
 
 _UNSET = object()
 
+# When Google refuses the key (quota used up, billing off, key restricted), stop asking for a
+# while so searches go straight to the free OpenStreetMap data instead of waiting on Google.
+_BLOCKED_UNTIL = 0.0
+_BLOCK_REASON = ""
+BLOCK_SECONDS = 15 * 60
+
+
+def google_blocked() -> bool:
+    import time
+
+    return time.time() < _BLOCKED_UNTIL
+
+
+def block_google(status: int, seconds: float = BLOCK_SECONDS) -> None:
+    import time
+
+    global _BLOCKED_UNTIL, _BLOCK_REASON
+    _BLOCKED_UNTIL = time.time() + seconds
+    _BLOCK_REASON = f"Google answered {status}"
+    logger.warning(f"Google Places refused the key ({status}); using OpenStreetMap for {int(seconds // 60)} minutes.")
+
+
+def unblock_google() -> None:
+    global _BLOCKED_UNTIL, _BLOCK_REASON
+    _BLOCKED_UNTIL = 0.0
+    _BLOCK_REASON = ""
+
+
+REFUSED = (401, 403, 429)
+
 
 class GooglePlacesService(PlacesProvider):
     """
@@ -248,6 +278,8 @@ class GooglePlacesService(PlacesProvider):
                     return SearchPageResult(places=results)
                 else:
                     logger.warning(f"Google Places searchNearby returned {res.status_code}: {res.text[:120]}")
+                    if res.status_code in REFUSED:
+                        block_google(res.status_code)
         except Exception as e:
             logger.error(f"Google Places searchNearby exception: {e}")
 
@@ -264,6 +296,8 @@ class GooglePlacesService(PlacesProvider):
     ) -> SearchPageResult:
         if not self.api_key:
             logger.warning("Attempted Google Places search without API key.")
+            return SearchPageResult()
+        if google_blocked():
             return SearchPageResult()
 
         city_cap = city.capitalize()
@@ -289,12 +323,10 @@ class GooglePlacesService(PlacesProvider):
                     json=payload,
                 )
 
-                if response.status_code in [401, 403]:
-                    logger.error("Google Places API authorization error. Check GOOGLE_MAPS_API_KEY.")
-                    return await self._search_nearby(city=city, query=query, limit=limit, category=category, locality=locality)
-                elif response.status_code == 429:
-                    logger.warning("Google Places API SearchText quota reached. Seamlessly activating live searchNearby.")
-                    return await self._search_nearby(city=city, query=query, limit=limit, category=category, locality=locality)
+                if response.status_code in REFUSED:
+                    # the key is refused; the search route falls back to OpenStreetMap
+                    block_google(response.status_code)
+                    return SearchPageResult()
 
                 response.raise_for_status()
                 data = response.json()
@@ -323,7 +355,7 @@ class GooglePlacesService(PlacesProvider):
         Server-side photo media proxy.
         Fetches the binary image directly from Places API, keeping GOOGLE_MAPS_API_KEY secure.
         """
-        if not self.api_key:
+        if not self.api_key or google_blocked():
             return None
 
         clean_name = photo_name.strip()
@@ -342,6 +374,8 @@ class GooglePlacesService(PlacesProvider):
                     return res.content, content_type
                 else:
                     logger.warning(f"Failed to fetch photo media for {clean_name}: {res.status_code}")
+                    if res.status_code in REFUSED:
+                        block_google(res.status_code)
                     return None
         except Exception as exc:
             logger.error(f"Error fetching photo media for {clean_name}: {exc}")
@@ -349,6 +383,9 @@ class GooglePlacesService(PlacesProvider):
 
     async def get_place_details(self, place_id: str) -> Optional[PlaceDetailResult]:
         if not self.api_key:
+            return None
+        if google_blocked():
+            self.last_error = 429
             return None
 
         clean_id = place_id.replace("gplaces:", "")
@@ -363,6 +400,8 @@ class GooglePlacesService(PlacesProvider):
                 if response.status_code != 200:
                     logger.error(f"Google Places Details error: status {response.status_code}: {response.text[:160]}")
                     self.last_error = response.status_code
+                    if response.status_code in REFUSED:
+                        block_google(response.status_code)
                     return None
 
                 item = response.json()
@@ -469,6 +508,8 @@ class GooglePlacesService(PlacesProvider):
         """
         if not self.api_key:
             return [], "no_api_key"
+        if google_blocked():
+            return [], "google_paused"
 
         city_cap = (city or "").capitalize()
         query = name if city_cap.lower() in name.lower() else f"{name}, {city_cap}"
@@ -489,6 +530,8 @@ class GooglePlacesService(PlacesProvider):
 
         if res.status_code != 200:
             logger.warning(f"Photo lookup for {name} returned {res.status_code}: {res.text[:160]}")
+            if res.status_code in REFUSED:
+                block_google(res.status_code)
             try:
                 status = (res.json().get("error") or {}).get("status") or ""
             except Exception:

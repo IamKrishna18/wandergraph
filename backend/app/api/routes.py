@@ -13,7 +13,7 @@ from app.api.schemas import (
     ReplaceStopRequest,
 )
 from app.services.places_provider import PlacesProvider
-from app.services.google_places import GooglePlacesService
+from app.services.google_places import GooglePlacesService, google_blocked
 from app.services.mock_places import MockPlacesService
 from app.services.osm_places import OpenStreetMapPlacesService
 from app.services.preference_service import PreferenceService, PreferenceState
@@ -40,7 +40,10 @@ def get_places_provider() -> PlacesProvider:
     if choice == "osm":
         return OpenStreetMapPlacesService()
     if choice == "google" or settings.has_google_places_key:
-        return GooglePlacesService() if settings.has_google_places_key else OpenStreetMapPlacesService()
+        # a refused Google key is skipped for a while (see google_places.block_google)
+        if settings.has_google_places_key and not google_blocked():
+            return GooglePlacesService()
+        return OpenStreetMapPlacesService()
     return OpenStreetMapPlacesService()
 
 
