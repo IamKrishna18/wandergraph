@@ -244,8 +244,8 @@ export function Footer({ onSearchFocus }: { onSearchFocus: () => void }) {
           </ul>
           <ul className="space-y-2 text-sand-dim">
             <li className="label mb-3">Project</li>
-            <li><a className="hover:text-sand" href="https://github.com/codeMaster60/wandergraph" target="_blank" rel="noreferrer">GitHub</a></li>
-            <li><a className="hover:text-sand" href="https://github.com/codeMaster60/wandergraph/blob/main/docs/api.md" target="_blank" rel="noreferrer">API reference</a></li>
+            <li><a className="hover:text-sand" href="https://github.com/IamKrishna18/wandergraph" target="_blank" rel="noreferrer">GitHub</a></li>
+            <li><a className="hover:text-sand" href="https://github.com/IamKrishna18/wandergraph/blob/main/docs/api.md" target="_blank" rel="noreferrer">API reference</a></li>
           </ul>
         </div>
       </div>

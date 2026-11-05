@@ -83,7 +83,7 @@ export function TopBar({ city, onCity, onGraph, onPlanner }: Props) {
             <Network className="h-4 w-4" aria-hidden /> Graph
           </a>
           <a
-            href="https://github.com/codeMaster60/wandergraph"
+            href="https://github.com/IamKrishna18/wandergraph"
             target="_blank"
             rel="noreferrer"
             className="hidden rounded-md p-2 text-sand-faint transition-colors hover:text-sand sm:inline-flex"
