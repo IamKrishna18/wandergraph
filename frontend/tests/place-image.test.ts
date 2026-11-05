@@ -113,3 +113,22 @@ describe('long official names', () => {
     expect(pickCommonsPhoto([f(390)], 'Cafe Niloufer Himayatnagar Branch Office', 'hyderabad')).toBeNull();
   });
 });
+
+describe('OpenStreetMap places', () => {
+  it('uses the photo tagged on the map object before anything else', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    const p = await resolvePlacePhoto({ name: 'Charminar', city: 'hyderabad', photos: [{ name: 'osm-photo:File:Charminar.jpg', proxy_url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Charminar.jpg?width=900', attributions: [{ display_name: 'Wikimedia Commons', uri: 'https://commons.wikimedia.org/wiki/File:Charminar.jpg' }] }] });
+    expect(p).toMatchObject({ kind: 'wikipedia', src: expect.stringContaining('Special:FilePath/Charminar.jpg') });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it('uses the exact Wikipedia article the map names', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (u) =>
+      String(u).includes('rest_v1/page/summary/Salar_Jung_Museum')
+        ? new Response(JSON.stringify({ title: 'Salar Jung Museum', thumbnail: { source: 'https://upload.wikimedia.org/x/thumb/a/b/S.jpg/320px-S.jpg' }, originalimage: { source: 'https://upload.wikimedia.org/x/a/b/S.jpg', width: 4000 }, content_urls: { desktop: { page: 'https://en.wikipedia.org/wiki/Salar_Jung_Museum' } } }), { status: 200 })
+        : new Response(JSON.stringify({ photos: [], reason: 'no_api_key' }), { status: 200 }),
+    );
+    const p = await resolvePlacePhoto({ name: 'Salar Jung Museum', city: 'hyderabad', wikipedia: 'en:Salar Jung Museum' });
+    expect(p?.src).toBe('https://upload.wikimedia.org/x/thumb/a/b/S.jpg/900px-S.jpg');
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('en.wikipedia.org/api/rest_v1'))).toBe(true);
+  });
+});

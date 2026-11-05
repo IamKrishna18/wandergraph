@@ -89,7 +89,7 @@ flowchart LR
     BE -->|optional| GM[Gemini]
 ```
 
-- **Backend** (`backend/`): FastAPI and Pydantic. The knowledge graph is a NetworkX `MultiDiGraph` built at startup from `backend/app/data/`, holding 76 hand-curated places (about 20 per city). Node types include City, Neighbourhood, Category, Atmosphere, CompanionType, PriceRange and TimeOfDay. With a Google key, live Google Places results are added to the curated ones.
+- **Backend** (`backend/`): FastAPI and Pydantic. The knowledge graph is a NetworkX `MultiDiGraph` built at startup from `backend/app/data/`, holding 76 hand-curated places (about 20 per city). Node types include City, Neighbourhood, Category, Atmosphere, CompanionType, PriceRange and TimeOfDay. Live places come from OpenStreetMap for free (or Google Places when its key is set), alongside the curated ones.
 - **Frontend** (`frontend/`): React 18, TypeScript, Tailwind, Cytoscape.js for the graph and Leaflet for maps. `src/adapter.ts` keeps results inside the area you asked for, builds the fit checklist and checks planner hours.
 
 ## Run it locally
@@ -117,10 +117,17 @@ Open **http://localhost:5173**. The dev server passes `/api` requests to the bac
 
 **3. Keys (optional).** Add them to `backend/.env`:
 
-| Variable | What it enables | Without it |
+Live places work **without any key**: by default WanderGraph searches OpenStreetMap for free.
+
+| Variable | Cost | What it enables |
 |---|---|---|
-| `GOOGLE_MAPS_API_KEY` | Live Google Places results, photos and opening status | Curated places only, with placeholder images |
-| `GEMINI_API_KEY` | AI-written day plans | Rule-based day plans |
+| *(none)* | Free | Live places from OpenStreetMap (Overpass API), photos from OpenStreetMap tags, Wikipedia and Wikimedia Commons |
+| `GEOAPIFY_API_KEY` | Free plan, no card | Faster, more reliable OpenStreetMap search through Geoapify |
+| `GEMINI_API_KEY` | Free tier, no card ([Google AI Studio](https://aistudio.google.com/)) | AI-written day plans (otherwise rule-based) |
+| `GOOGLE_MAPS_API_KEY` | Needs Google Cloud billing | Google Places results with ratings, reviews and Google photos |
+| `PLACES_PROVIDER` | | `auto` (default: Google if its key is set, else OpenStreetMap), `google`, `osm` or `curated` |
+
+If Google refuses a request (quota or billing), searches fall back to OpenStreetMap, then to the curated places. OpenStreetMap has no ratings, so its results are ranked by how well-known places are (Wikipedia / Wikidata entries, tourist-attraction tags) and by distance. Map data © OpenStreetMap contributors (ODbL).
 
 > Never commit `.env`. It's already in `.gitignore`. On a hosting platform, set keys in its environment-variable settings instead.
 
@@ -129,7 +136,7 @@ Open **http://localhost:5173**. The dev server passes `/api` requests to the bac
 ### Vercel (what the live site uses)
 1. Import the repo at [vercel.com/new](https://vercel.com/new).
 2. Set **Application Preset** to **Other**, not "Services", and leave **Root Directory** as `./`. The included `vercel.json` handles the build and sends `/api/*` to the FastAPI function in `api/index.py`.
-3. Add `GOOGLE_MAPS_API_KEY` (and optionally `GEMINI_API_KEY`) under **Environment Variables**.
+3. Optionally add `GEOAPIFY_API_KEY` and `GEMINI_API_KEY` (both free) under **Environment Variables**. Live places work without them.
 4. Click **Deploy**. Every push to `main` redeploys automatically.
 
 > The backend keeps search sessions and day plans in memory. On serverless hosting the function can restart between requests. If that happens, "Swap this stop" asks you to request the plan again. For an always-on backend, use Render.
@@ -182,8 +189,9 @@ wandergraph/
 
 ## Known limits
 
-- The curated set is small, about 20 places per city. Add a Google key for full coverage.
-- Without a Google key, "inside the area" is judged from each place's address, because the curated data has no area boundaries.
+- The curated set is small, about 20 places per city; live OpenStreetMap or Google results fill in the rest.
+- OpenStreetMap has no ratings or review counts, and the public Overpass API can be slow at busy times (a free Geoapify key avoids that).
+- "Inside the area" means within 2 km of the area's centre for OpenStreetMap results, and is judged from the address for curated and Google results.
 - Travel times are straight-line estimates, not routed directions.
 
 ## License

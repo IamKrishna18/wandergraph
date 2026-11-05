@@ -86,7 +86,7 @@ export function Hero({ city, loading, provider, areas, graphSize, onSearch }: Pr
         <div className="animate-rise">
           <p className="inline-flex items-center gap-2 rounded-full border border-sand/10 bg-white/[0.03] py-1 pl-2 pr-3 text-xs text-sand-dim">
             <span className={`h-1.5 w-1.5 rounded-full ${provider?.is_live ? 'animate-pulseDot bg-jal' : 'bg-saffron'}`} aria-hidden />
-            {provider ? (provider.is_live ? 'Live Google Places' : 'Curated places') : 'Connecting'}
+            {provider ? (provider.is_live ? (/OpenStreetMap/.test(provider.provider_name) ? 'Live OpenStreetMap' : 'Live Google Places') : 'Curated places') : 'Connecting'}
             <span className="text-sand-faint">·</span>
             <span className="font-mono">{meta.code} {clock}</span>
           </p>

@@ -9,7 +9,7 @@ const STATUS = {
 
 const SOURCE: Record<string, string> = {
   curated: 'Curated data',
-  live: 'Google Places',
+  live: 'Live map data',
   computed: 'Calculated',
   inferred: 'Guessed from type',
 };

@@ -35,7 +35,7 @@ export function loadPlacePhoto(id: string): Promise<NodePhoto | null> {
       .place(key)
       // the same rule as the cards: a photo of this exact place, or none
       .then(async (d) => {
-        const place = { name: d.place.name, city: d.place.city, photos: d.place.photos, coordinates: d.place.coordinates };
+        const place = { name: d.place.name, city: d.place.city, photos: d.place.photos, coordinates: d.place.coordinates, wikipedia: d.place.provenance?.wikipedia };
         // the graph loads every place at once, so it doesn't spend a Google search on each
         let ph = await resolvePlacePhoto(place, { noLookup: true });
         // a Google photo that won't load (quota, outage) falls back to Wikipedia / Commons

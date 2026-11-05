@@ -291,16 +291,56 @@ export interface PlaceForPhoto {
   city: string;
   photos?: PhotoLike[];
   coordinates?: { latitude: number; longitude: number } | null;
+  /** the exact Wikipedia article, when the map data names it ("en:Charminar") */
+  wikipedia?: string | null;
+}
+
+/** A photo tagged on the OpenStreetMap object itself, so it shows this exact place. */
+export function isTaggedPhoto(p: PhotoLike | undefined | null): boolean {
+  return Boolean(p?.proxy_url && (p.name ?? '').startsWith('osm-photo:'));
+}
+
+const articleMemory = new Map<string, Promise<RelevantPhoto | null>>();
+/** Lead image of a named Wikipedia article ("en:Charminar"); the map data already says it is this place. */
+export function findArticlePhoto(tag: string): Promise<RelevantPhoto | null> {
+  let p = articleMemory.get(tag);
+  if (!p) {
+    const m = /^([a-z-]{2,12}):(.+)$/.exec(tag.trim());
+    const lang = m ? m[1] : 'en';
+    const title = (m ? m[2] : tag).trim().replace(/ /g, '_');
+    p = fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        // a 900px thumbnail when the original is big enough, otherwise the original itself
+        const orig = d?.originalimage;
+        const src = orig?.width && orig.width <= 1400 ? orig.source : d?.thumbnail?.source?.replace(/\/\d+px-/, '/900px-');
+        if (!src || /\.svg/i.test(src)) return null;
+        return { src, credit: `Wikimedia Commons, via the Wikipedia article “${d.title ?? title}”`, href: d?.content_urls?.desktop?.page, kind: 'wikipedia' as const };
+      })
+      .catch(() => {
+        articleMemory.delete(tag);
+        return null;
+      });
+    articleMemory.set(tag, p);
+  }
+  return p;
 }
 
 /** Best photo for a place: Google (attached or looked up), then Wikipedia / Commons, or nothing. */
 export async function resolvePlacePhoto(place: PlaceForPhoto, opts: { skipGoogle?: boolean; noLookup?: boolean } = {}): Promise<RelevantPhoto | null> {
+  // a photo tagged on the map object itself is of this exact place
+  const tagged = place.photos?.find(isTaggedPhoto);
+  if (tagged) return { src: tagged.proxy_url!, credit: 'Wikimedia Commons (tagged on OpenStreetMap)', href: tagged.attributions?.[0]?.uri ?? undefined, kind: 'wikipedia' };
   if (!opts.skipGoogle) {
     const attached = place.photos?.find(isGooglePhoto);
     if (attached) return fromGoogle(attached);
     // each lookup is a paid Google search, so bulk previews (the graph) skip it
     const looked = opts.noLookup ? null : await findGooglePhoto(place.name, place.city, place.coordinates);
     if (looked) return looked;
+  }
+  if (place.wikipedia) {
+    const article = await findArticlePhoto(place.wikipedia);
+    if (article) return article;
   }
   return findWikiPhoto(place.name, place.city, place.coordinates);
 }
@@ -312,7 +352,7 @@ export async function resolvePlacePhoto(place: PlaceForPhoto, opts: { skipGoogle
 export function useRelevantPhoto(place: PlaceForPhoto | null | undefined): [RelevantPhoto | null | undefined, () => void] {
   const google = place?.photos?.find(isGooglePhoto);
   const [failed, setFailed] = useState<'none' | 'google' | 'all'>('none');
-  const base = place ? `${place.city}|${place.name}|${google?.proxy_url ?? ''}` : '';
+  const base = place ? `${place.city}|${place.name}|${google?.proxy_url ?? ''}|${place.photos?.find(isTaggedPhoto)?.proxy_url ?? ''}|${place.wikipedia ?? ''}` : '';
   const key = `${base}|${failed}`;
   const [state, setState] = useState<{ key: string; v: RelevantPhoto | null | undefined }>({ key: '', v: undefined });
   useEffect(() => setFailed('none'), [base]);
@@ -332,5 +372,6 @@ export function useRelevantPhoto(place: PlaceForPhoto | null | undefined): [Rele
   }, [key]);
   const photo = state.key === key ? state.v : undefined;
   const broken = () => setFailed(photo?.kind === 'google' ? 'google' : 'all');
+  // (a tagged OpenStreetMap photo that fails to load simply leaves the placeholder)
   return [photo, broken];
 }

@@ -143,3 +143,17 @@ describe('itinerary checks', () => {
     expect(it2.travel_feasibility_note).toMatch(/km in total/);
   });
 });
+
+describe('OpenStreetMap places in the adapter', () => {
+  it('trusts the area from the map, marks the source, and treats it as live data', () => {
+    const raw: RawPlace = {
+      id: 'osm:way/123', name: 'Uppal Bagayath Park', city: 'hyderabad', locality: 'Uppal', formatted_address: null,
+      types: ['park', 'tourist_attraction'], primary_type: 'park', photos: [], price_estimate: null,
+      provenance: { source: 'OpenStreetMap contributors', verification_status: 'source_returned', wikipedia: 'en:X', osm_id: 'way/123' },
+    } as unknown as RawPlace;
+    const p = toPlace(raw, 'hyderabad');
+    expect(p.locality).toBe('Uppal');
+    expect(p.provenance).toMatchObject({ source: 'OpenStreetMap contributors', verification_status: 'source_returned', wikipedia: 'en:X' });
+    expect(p.groups).toContain('nature');
+  });
+});

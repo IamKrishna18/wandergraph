@@ -48,13 +48,14 @@ interface Props {
 export function PlaceCard({ rec, rank, feature = false, localityName, onOpen, onGraph }: Props) {
   const { place } = rec;
   // only a photo of this exact place: Google's own, or a matching Wikipedia photo; never a category stock photo
-  const [photo, photoBroken] = useRelevantPhoto(place);
+  const [photo, photoBroken] = useRelevantPhoto({ ...place, wikipedia: place.provenance?.wikipedia });
   const src = photo?.src;
   const credit = photo ? (photo.kind === 'wikipedia' ? 'Wikimedia Commons' : photo.credit) : '';
   const conf = CONFIDENCE[rec.match_confidence];
   const GroupIcon = (place.groups.length && GROUP_ICONS[place.groups[0]]) || Sparkles;
   const groupLabel = place.groups.length ? GROUP_LABELS[place.groups[0]] : typeLabel(place.primary_type);
   const live = place.provenance.verification_status === 'source_returned';
+  const sourceLabel = live ? (/OpenStreetMap/.test(place.provenance.source) ? 'OpenStreetMap' : 'Google') : 'Curated';
 
   return (
     <article
@@ -85,7 +86,7 @@ export function PlaceCard({ rec, rank, feature = false, localityName, onOpen, on
         </span>
         <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-md bg-ink/70 px-1.5 py-0.5 text-[11px] text-sand-dim backdrop-blur">
           {live ? <Radio className="h-3 w-3 text-jal" aria-hidden /> : <BookMarked className="h-3 w-3" aria-hidden />}
-          {live ? 'Google' : 'Curated'}
+          {sourceLabel}
         </span>
       </button>
 

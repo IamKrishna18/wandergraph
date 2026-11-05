@@ -199,13 +199,18 @@ function priceFromLevel(level: number | null | undefined, currency: string): Pri
 }
 
 /** Make the price honest: right currency, no landmark fee on a restaurant, curated ≠ verified. */
+/** Live data comes from Google ("gplaces:…") or OpenStreetMap ("osm:…"); everything else is curated. */
+export const isGoogleId = (id: string) => id.startsWith('gplaces:');
+export const isOsmId = (id: string) => id.startsWith('osm:');
+export const isLiveId = (id: string) => isGoogleId(id) || isOsmId(id);
+
 export function cleanPrice(raw: RawPlace, city: string, groups: string[]): PriceEstimate | null {
   const currency = currencyFor(city);
   const pe = raw.price_estimate;
   if (!pe) return priceFromLevel(raw.price_level, currency);
   const isLandmarkFee = /landmark admission fee/i.test(pe.methodology_note);
   if ((isLandmarkFee && groups.some((g) => COMMERCIAL.has(g))) || pe.currency !== currency) return priceFromLevel(raw.price_level, currency);
-  const curated = !raw.id.startsWith('gplaces:');
+  const curated = !isLiveId(raw.id);
   if (pe.estimate_type === 'verified') {
     return {
       ...pe,
@@ -231,15 +236,18 @@ function photoSource(name: string): PlacePhoto['source'] {
 }
 
 export function toPlace(raw: RawPlace, cityHint?: string): Place {
-  const live = raw.id.startsWith('gplaces:');
+  const google = isGoogleId(raw.id);
+  const osm = isOsmId(raw.id);
+  const live = google || osm;
   const city = (raw.city || cityHint || 'hyderabad') as CityId;
   const groups = classify(raw.types, raw.primary_type);
   return {
     id: raw.id,
     name: raw.name,
     city,
-    // The API stamps live results with the searched locality, so for live places we only trust the address.
-    locality: live ? null : raw.locality ?? null,
+    // The API stamps Google results with the searched locality, so for those we only trust the address.
+    // OpenStreetMap areas come from the map itself (or measured distance to the area's centre).
+    locality: google ? null : raw.locality ?? null,
     formatted_address: raw.formatted_address ?? null,
     coordinates: raw.coordinates ?? null,
     primary_type: raw.primary_type ?? null,
@@ -254,12 +262,14 @@ export function toPlace(raw: RawPlace, cityHint?: string): Place {
     is_open_now: live ? raw.is_open_now ?? null : null,
     accessibility: { wheelchair_accessible_entrance: null, source: 'unknown' },
     photos: (raw.photos ?? []).map((p) => ({ name: p.name, proxy_url: p.proxy_url, source: photoSource(p.name), attributions: p.attributions ?? [] })),
-    provenance: live
+    provenance: google
       ? { source: 'Google Places API (New)', verification_status: 'source_returned' }
-      : { source: 'WanderGraph curated seed dataset', verification_status: 'curated' },
+      : osm
+        ? { source: 'OpenStreetMap contributors', verification_status: 'source_returned', wikipedia: raw.provenance?.wikipedia ?? null, osm_id: raw.provenance?.osm_id ?? null }
+        : { source: 'WanderGraph curated seed dataset', verification_status: 'curated' },
     website_uri: raw.website_uri ?? null,
     national_phone_number: raw.national_phone_number ?? null,
-    editorial_summary: live ? raw.editorial_summary ?? null : null, // curated summaries are generated, not real
+    editorial_summary: google ? raw.editorial_summary ?? null : null, // curated summaries are generated, not real
     maps_uri: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${raw.name} ${cap(city)}`)}`,
   };
 }
@@ -384,7 +394,7 @@ const GROUP_LABEL: Record<string, string> = {
 
 export function buildFit(p: Place, prefs: Preferences, reasons: string[], unverified: string[], inside: boolean | null, distance: number | null): FitItem[] {
   const fit: FitItem[] = [];
-  const src: FitItem['source'] = p.id.startsWith('gplaces:') ? 'live' : 'curated';
+  const src: FitItem['source'] = isLiveId(p.id) ? 'live' : 'curated';
   const has = (re: RegExp) => reasons.some((r) => re.test(r));
   const add = (key: string, label: string, wanted: string, status: FitItem['status'], detail: string, source: FitItem['source'] = null) =>
     fit.push({ key, label, wanted, status, detail, source });
@@ -461,7 +471,7 @@ export function processSearch(raw: RawSearchResponse, ctx: SearchContext): Proce
     }
     const cur = prefs.currency;
     const texts = r.matched_reasons.map((t) => cleanReason(t, cur));
-    const live = place.id.startsWith('gplaces:');
+    const live = isLiveId(place.id);
     const reasons: Reason[] = texts
       .filter((t) => !(prefs.locality && t === `In ${prefs.locality}`)) // locality is re-checked below
       .map((text) => ({ text, source: live ? 'live' : 'curated' }));
@@ -494,7 +504,7 @@ export function processSearch(raw: RawSearchResponse, ctx: SearchContext): Proce
     for (const r of recs) {
       r.in_locality = inLocality(r.place, prefs.locality);
       if (area && r.place.coordinates) r.distance_from_locality_km = Math.round(km(area, r.place.coordinates) * 100) / 100;
-      if (r.in_locality) r.reasons.unshift({ text: `In ${prefs.locality}`, source: r.place.id.startsWith('gplaces:') ? 'live' : 'curated' });
+      if (r.in_locality) r.reasons.unshift({ text: `In ${prefs.locality}`, source: isLiveId(r.place.id) ? 'live' : 'curated' });
       else r.match_confidence = 'potential';
       r.matched_reasons = r.reasons.map((x) => x.text);
     }

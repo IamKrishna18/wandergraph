@@ -15,6 +15,7 @@ from app.api.schemas import (
 from app.services.places_provider import PlacesProvider
 from app.services.google_places import GooglePlacesService
 from app.services.mock_places import MockPlacesService
+from app.services.osm_places import OpenStreetMapPlacesService
 from app.services.preference_service import PreferenceService, PreferenceState
 from app.services.recommendation_service import RecommendationService
 from app.services.graph_service import GraphService
@@ -32,7 +33,22 @@ itinerary_service = ItineraryService(graph_service=graph_service)
 
 # Dynamic provider resolver
 def get_places_provider() -> PlacesProvider:
-    if settings.has_google_places_key:
+    """Google when its key is set, otherwise free OpenStreetMap data; PLACES_PROVIDER can force one."""
+    choice = (settings.places_provider or "auto").strip().lower()
+    if choice == "curated":
+        return MockPlacesService()
+    if choice == "osm":
+        return OpenStreetMapPlacesService()
+    if choice == "google" or settings.has_google_places_key:
+        return GooglePlacesService() if settings.has_google_places_key else OpenStreetMapPlacesService()
+    return OpenStreetMapPlacesService()
+
+
+def provider_for_id(place_id: str) -> PlacesProvider:
+    """Details come from wherever the place came from."""
+    if place_id.startswith("osm:"):
+        return OpenStreetMapPlacesService()
+    if place_id.startswith("gplaces:") and settings.has_google_places_key:
         return GooglePlacesService()
     return MockPlacesService()
 
@@ -117,8 +133,19 @@ async def search_places(request: SearchRequest):
         locality=target_locality,
     )
 
-    # If live provider returned empty (or failed), fallback to mock dataset for resilience
+    # Google refused or found nothing: try free OpenStreetMap data before the curated set
     if not paged_result.places and isinstance(provider, GooglePlacesService):
+        logger.warning("Google returned no results. Trying OpenStreetMap.")
+        paged_result = await OpenStreetMapPlacesService().search_places(
+            query=search_query,
+            city=session.city,
+            limit=max(request.limit, 6),
+            category=request.category,
+            locality=target_locality,
+        )
+
+    # If live data returned nothing (or failed), fall back to the curated dataset for resilience
+    if not paged_result.places and isinstance(provider, (GooglePlacesService, OpenStreetMapPlacesService)):
         logger.warning("Live provider returned no results. Falling back to local dataset for resilience.")
         fallback = MockPlacesService()
         paged_result = await fallback.search_places(
@@ -131,7 +158,8 @@ async def search_places(request: SearchRequest):
         )
 
     # 2.5 Ensure authentic photos for every venue (Google Places photos or Wikimedia/Unsplash fallback)
-    await image_service.enrich_places_with_photos(paged_result.places, session.city)
+    # (OpenStreetMap places carry their own tagged photos; the page finds the rest)
+    await image_service.enrich_places_with_photos([p for p in paged_result.places if not p.id.startswith("osm:")], session.city)
 
     # 3. Score & rank candidates via knowledge graph & preference constraints
     scored_results = recommendation_service.rank_and_explain(
@@ -275,10 +303,10 @@ async def get_node_neighborhood(node_id: str, depth: int = Query(default=1, ge=1
     return subgraph
 
 
-@router.get("/places/{place_id}")
+@router.get("/places/{place_id:path}")  # path: OpenStreetMap ids contain a slash ("osm:way/123")
 async def get_place_details(place_id: str):
     """Fetch place details with attributes and provenance."""
-    provider = get_places_provider()
+    provider = provider_for_id(place_id)
     details = await provider.get_place_details(place_id)
     if not details:
         fallback = MockPlacesService()

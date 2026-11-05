@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Accessibility, Clock, Coins, ExternalLink, Globe, MapPin, Network, Phone, ShieldCheck, Star, X } from 'lucide-react';
 import { api } from '../api';
 import { useRelevantPhoto } from '../placeImage';
-import { toPlace } from '../adapter';
+import { isLiveId, toPlace } from '../adapter';
 import { GROUP_LABELS } from '../meta';
 import { useEscape } from '../hooks';
 import type { CityId, Place, Recommendation } from '../types';
@@ -54,14 +54,14 @@ export function PlaceDrawer({ placeId, match, localityName, city, onClose, onOpe
           place.is_open_now ??= fromSearch.is_open_now;
         }
         const gc = d.graph_connections ?? {};
-        setData({ place, graph_connections: { ...gc, graph_node_id: place.id.startsWith('gplaces:') ? null : `place:${place.id}` } });
+        setData({ place, graph_connections: { ...gc, graph_node_id: isLiveId(place.id) ? null : `place:${place.id}` } });
       })
       .catch((e) => {
         if (!live) return;
         // Google can refuse the details call (quota, outage); the search result still has the essentials
         const fromSearch = matchRef.current?.place.id === placeId ? matchRef.current.place : null;
         if (fromSearch) {
-          setData({ place: fromSearch, graph_connections: { graph_node_id: fromSearch.id.startsWith('gplaces:') ? null : `place:${fromSearch.id}` } });
+          setData({ place: fromSearch, graph_connections: { graph_node_id: isLiveId(fromSearch.id) ? null : `place:${fromSearch.id}` } });
           setPartial(true);
         } else setError((e as Error).message.startsWith('Live details') ? (e as Error).message : "Couldn't load this place right now. Please try again in a moment.");
       });
@@ -71,7 +71,7 @@ export function PlaceDrawer({ placeId, match, localityName, city, onClose, onOpe
   }, [placeId, city]);
 
   // only a photo of this exact place: Google's own, or a matching Wikipedia photo
-  const [photo, photoBroken] = useRelevantPhoto(data?.place && placeId ? { name: data.place.name, city: data.place.city, photos: data.place.photos, coordinates: data.place.coordinates } : null);
+  const [photo, photoBroken] = useRelevantPhoto(data?.place && placeId ? { name: data.place.name, city: data.place.city, photos: data.place.photos, coordinates: data.place.coordinates, wikipedia: data.place.provenance?.wikipedia } : null);
 
   if (!placeId) return null;
   const p = data?.place;
@@ -172,7 +172,7 @@ export function PlaceDrawer({ placeId, match, localityName, city, onClose, onOpe
                   {wheel != null && <span className="block text-xs text-sand-faint">Source: {p.accessibility.source === 'google' ? 'Google Places' : 'curated data'}</span>}
                 </Fact>
                 <Fact icon={ShieldCheck} label="Data source">
-                  {PROVENANCE[p.provenance?.verification_status] ?? 'Unknown'}
+                  {/OpenStreetMap/.test(p.provenance?.source ?? '') ? 'Live from OpenStreetMap (© OpenStreetMap contributors)' : PROVENANCE[p.provenance?.verification_status] ?? 'Unknown'}
                 </Fact>
               </dl>
 

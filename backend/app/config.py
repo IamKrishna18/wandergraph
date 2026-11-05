@@ -23,6 +23,15 @@ class Settings(BaseSettings):
     # API Keys - kept strictly server-side
     google_maps_api_key: Optional[str] = Field(default=None, alias="GOOGLE_MAPS_API_KEY")
     gemini_api_key: Optional[str] = Field(default=None, alias="GEMINI_API_KEY")
+    # Free OpenStreetMap place search; a Geoapify key (free plan, no card) makes it faster
+    geoapify_api_key: Optional[str] = Field(default=None, alias="GEOAPIFY_API_KEY")
+    # "auto": Google when its key is set, else OpenStreetMap; or force "google", "osm" or "curated"
+    places_provider: str = Field(default="auto", alias="PLACES_PROVIDER")
+    overpass_urls: List[str] = [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+    ]
+    osm_user_agent: str = "WanderGraph/1.0 (+https://github.com/codeMaster60/wandergraph)"
 
     # CORS configuration
     cors_origins: List[str] = [
@@ -64,6 +73,11 @@ class Settings(BaseSettings):
                 if val and len(val.strip()) > 5:
                     return val.strip()
         return None
+
+    @property
+    def geoapify_api_key_live(self) -> Optional[str]:
+        key = self.geoapify_api_key or os.getenv("GEOAPIFY_API_KEY")
+        return key.strip() if key and len(key.strip()) > 5 else None
 
     @property
     def has_google_places_key(self) -> bool:

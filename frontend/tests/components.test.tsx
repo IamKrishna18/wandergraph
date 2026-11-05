@@ -135,3 +135,12 @@ describe('PlaceDrawer', () => {
     expect(screen.queryByText(/Place not found/)).not.toBeInTheDocument();
   });
 });
+
+describe('OpenStreetMap results', () => {
+  it('labels the source as OpenStreetMap and keeps its area', () => {
+    const r = rec({ place: place({ id: 'osm:way/123', name: 'Uppal Bagayath Park', locality: 'Uppal', provenance: { source: 'OpenStreetMap contributors', verification_status: 'source_returned' } }) });
+    render(<PlaceCard rec={r} rank={1} onOpen={() => undefined} onGraph={() => undefined} />);
+    expect(screen.getByText('OpenStreetMap')).toBeInTheDocument();
+    expect(screen.getByText('Uppal')).toBeInTheDocument();
+  });
+});
