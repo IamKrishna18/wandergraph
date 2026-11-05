@@ -22,7 +22,7 @@ Type something like **"peaceful parks in Uppal"**, **"romantic cafes in Banjara 
 2. **Stays where you asked.** Results are limited to the area you named. If nothing there fits, it says so plainly and shows the closest matches elsewhere in the city, each with its distance.
 3. **Shows why each place is listed.** Every result has a checklist: *location ✓, type ✓, mood ✓, budget ?*. It also says where each fact came from: Google, the curated data, or unknown.
 4. **Plans a day.** Ask for "a full day of Nizami heritage". You get a timed route with travel distances, warnings for stops that are closed at their planned time, and one-click swaps.
-5. **Lets you explore the graph.** Every city is a knowledge graph laid out in rings: the city in the centre, then its neighbourhoods, their places, and what describes those places on the outer ring. Hover a node to trace its links, or click it to see everything it connects to.
+5. **Lets you explore the graph.** Every city is a knowledge graph laid out in rings and split into coloured sectors. Group places by theme (heritage, temples, nature, food, arts, modern & tech, shopping, fun), by who they suit (family, couples, friends, solo) or by neighbourhood. Hover any node to preview it with photos, or click it to see everything it connects to.
 
 ## Screenshots
 

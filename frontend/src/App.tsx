@@ -12,6 +12,7 @@ import { GraphExplorer } from './components/GraphExplorer';
 import { Planner, STARTERS } from './components/Planner';
 import { MapView } from './components/MapView';
 import { CityStrip, Faq, Footer, PlanTeaser, PromptMarquee, SectionHead } from './components/Sections';
+import type { GroupBy } from './graphLayout';
 
 const FILTERS: FilterGroup[] = [
   { id: 'heritage', label: 'Heritage', icon: 'Landmark' },
@@ -31,6 +32,7 @@ export default function App() {
   const [graphFull, setGraphFull] = useState<{ open: boolean; focus: string | null }>({ open: false, focus: null });
   const [planner, setPlanner] = useState<{ open: boolean; starter: { text: string; n: number } | null }>({ open: false, starter: null });
   const [refine, setRefine] = useState('');
+  const [graphGroup, setGraphGroup] = useState<GroupBy>('theme');
   const [refineVisible, setRefineVisible] = useState(typeof IntersectionObserver === 'undefined');
   const resultsRef = useRef<HTMLElement>(null);
   useReveal();
@@ -308,7 +310,7 @@ export default function App() {
             n="03"
             kicker="Knowledge graph"
             title={`How ${meta.name} is connected.`}
-            sub="The city sits in the middle, neighbourhoods around it, their places beyond, and what describes those places on the outer ring. Hover anything to trace its links; click to inspect."
+            sub="Places are grouped into sectors: by theme (heritage, food, nature, modern & tech…), by who they suit (family, couples, friends, solo), or by neighbourhood. Hover anything to preview it with photos; click to see everything it connects to."
             right={
               <button type="button" className="btn-ghost" onClick={() => openGraph(`city:${city}`)}>
                 <Sparkles className="h-4 w-4" aria-hidden /> Full screen
@@ -317,7 +319,7 @@ export default function App() {
           />
           <div className="reveal mt-10">
             {!graphFull.open && (
-              <GraphExplorer key={city} city={city} data={graph.data} error={graph.error} variant="inline" onOpenPlace={openPlace} onFilterCategory={filterCategory} onExpand={() => openGraph(null)} />
+              <GraphExplorer key={city} city={city} data={graph.data} error={graph.error} variant="inline" groupBy={graphGroup} onGroupBy={setGraphGroup} onOpenPlace={openPlace} onFilterCategory={filterCategory} onExpand={() => openGraph(null)} />
             )}
           </div>
         </section>
@@ -361,7 +363,7 @@ export default function App() {
 
       <PlaceDrawer placeId={detailId} match={match} localityName={locality} city={city} onClose={() => setDetailId(null)} onOpen={setDetailId} onGraph={(id) => { setDetailId(null); openGraph(id); }} />
       {graphFull.open && (
-        <GraphExplorer city={city} data={graph.data} error={graph.error} focus={graphFull.focus} variant="full" onClose={() => setGraphFull({ open: false, focus: null })} onOpenPlace={openPlace} onFilterCategory={filterCategory} />
+        <GraphExplorer city={city} data={graph.data} error={graph.error} focus={graphFull.focus} variant="full" groupBy={graphGroup} onGroupBy={setGraphGroup} onClose={() => setGraphFull({ open: false, focus: null })} onOpenPlace={openPlace} onFilterCategory={filterCategory} />
       )}
       <Planner open={planner.open} city={city} sessionId={sessionId} starter={planner.starter} onClose={() => setPlanner((p) => ({ ...p, open: false }))} onOpenPlace={(id) => { setPlanner((p) => ({ ...p, open: false })); setDetailId(id); }} />
     </>
