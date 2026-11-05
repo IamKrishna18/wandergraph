@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import recorded from './api-recorded.json';
 
 vi.mock('../src/components/MapView', () => ({ MapView: () => <div data-testid="map" /> }));
-vi.mock('../src/components/GraphOverlay', () => ({ GraphOverlay: () => null }));
+vi.mock('../src/components/GraphExplorer', () => ({ GraphExplorer: () => null }));
 
 import App from '../src/App';
 
@@ -54,7 +54,7 @@ describe('App against the current backend API', () => {
     await waitFor(() => expect(searchCalls().length).toBe(1));
     fireEvent.change(screen.getByLabelText(/Describe what you want to do/), { target: { value: 'temples in kyoto' } });
     fireEvent.click(screen.getByRole('button', { name: 'Search' }));
-    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Kyoto' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: /Search Kyoto/ })).toBeInTheDocument());
     const kyoto = searchCalls().filter((c) => c.body.query === 'temple in kyoto');
     expect(kyoto.map((c) => c.body.city)).toEqual(['hyderabad', 'kyoto']);
   });

@@ -1,9 +1,9 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import { buildFit, km, processItinerary, processSearch, stripConstraint, toServerQuery } from './adapter';
-import type { ChatMessage, CityId, Element, Interpretation, Itinerary, LocalityArea, Preferences, ProviderStatus, Recommendation } from './types';
+import type { ChatMessage, CityId, GraphData, Interpretation, Itinerary, LocalityArea, Preferences, ProviderStatus, Recommendation } from './types';
 
-/* ---------------- element (fire / water) theme ---------------- */
+/* ---------------- storage ---------------- */
 
 function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
   try {
@@ -21,19 +21,91 @@ function store(key: string, value: string) {
   }
 }
 
-export const ElementContext = createContext<{ element: Element; setElement: (e: Element) => void }>({
-  element: 'fire',
-  setElement: () => undefined,
-});
-export const useElement = () => useContext(ElementContext);
+/* ---------------- page effects ---------------- */
 
-export function useElementState() {
-  const [element, setElementState] = useState<Element>(() => readStored('wg-element', ['fire', 'water'] as const, 'fire'));
+/** Fade sections in as they scroll into view. Content stays visible where IntersectionObserver is missing. */
+export function useReveal() {
   useEffect(() => {
-    document.documentElement.dataset.element = element;
-    store('wg-element', element);
-  }, [element]);
-  return { element, setElement: setElementState };
+    if (typeof IntersectionObserver === 'undefined') return;
+    const root = document.documentElement;
+    root.classList.add('reveal-on');
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            e.target.classList.add('in');
+            io.unobserve(e.target);
+          }
+        }
+      },
+      { rootMargin: '0px 0px -8% 0px', threshold: 0.08 },
+    );
+    const watch = () => document.querySelectorAll('.reveal:not(.in)').forEach((el) => io.observe(el));
+    watch();
+    const mo = new MutationObserver(watch);
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      io.disconnect();
+      mo.disconnect();
+      root.classList.remove('reveal-on');
+    };
+  }, []);
+}
+
+/** One pointer listener drives the spotlight on every `.spot` card. */
+export function useSpotlight() {
+  useEffect(() => {
+    const move = (e: PointerEvent) => {
+      const el = (e.target as Element | null)?.closest?.('.spot') as HTMLElement | null;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      el.style.setProperty('--x', `${e.clientX - r.left}px`);
+      el.style.setProperty('--y', `${e.clientY - r.top}px`);
+    };
+    window.addEventListener('pointermove', move, { passive: true });
+    return () => window.removeEventListener('pointermove', move);
+  }, []);
+}
+
+/** Current time in a city, refreshed every 30 seconds. */
+export function useCityClock(timeZone: string): string {
+  const fmt = () => {
+    try {
+      return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone }).format(new Date());
+    } catch {
+      return '';
+    }
+  };
+  const [t, setT] = useState(fmt);
+  useEffect(() => {
+    const id = setInterval(() => setT(fmt()), 30000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeZone]);
+  return t;
+}
+
+const graphCache = new Map<string, Promise<GraphData>>();
+/** The city's knowledge graph, fetched once per city and shared by the hero and the explorer. */
+export function useCityGraph(city: CityId) {
+  const [data, setData] = useState<GraphData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    setData(null);
+    setError(null);
+    let p = graphCache.get(city);
+    if (!p) {
+      p = api.graph(city);
+      graphCache.set(city, p);
+      p.catch(() => graphCache.delete(city));
+    }
+    p.then((g) => live && setData(g)).catch((e: Error) => live && setError(e.message));
+    return () => {
+      live = false;
+    };
+  }, [city]);
+  return { data, error };
 }
 
 /* ---------------- discovery (search) ---------------- */

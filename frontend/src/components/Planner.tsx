@@ -5,7 +5,7 @@ import { useEscape, usePlanner } from '../hooks';
 import type { CityId, Itinerary, ItineraryStop } from '../types';
 import { MapView } from './MapView';
 
-const STARTERS: Record<CityId, string[]> = {
+export const STARTERS: Record<CityId, string[]> = {
   hyderabad: ['A full day of Nizami heritage', 'Romantic evening by the lake', 'Half day with kids, under ₹500', 'Biryani and bazaars on Saturday'],
   bengaluru: ['Gardens in the morning, brewpub at night', 'Tiffin trail tomorrow morning', 'Family day out, free places only', 'Art and books for a rainy afternoon'],
   tokyo: ['First day in Tokyo, the classics', 'Evening of city views for two', 'Free shrines and parks', 'Half day around Shibuya'],
@@ -22,11 +22,13 @@ interface Props {
   open: boolean;
   city: CityId;
   sessionId?: string;
+  /** a prompt to send as soon as the planner opens; `n` changes for each new request */
+  starter?: { text: string; n: number } | null;
   onClose: () => void;
   onOpenPlace: (id: string) => void;
 }
 
-export function Planner({ open, city, sessionId, onClose, onOpenPlace }: Props) {
+export function Planner({ open, city, sessionId, starter, onClose, onOpenPlace }: Props) {
   const { itinerary, history, busy, error, plan, swap, reset } = usePlanner(sessionId);
   const [input, setInput] = useState('');
   const [showMap, setShowMap] = useState(true);
@@ -59,6 +61,16 @@ export function Planner({ open, city, sessionId, onClose, onOpenPlace }: Props) 
     send(input);
   };
 
+  const sentStarter = useRef(0);
+  useEffect(() => {
+    if (open && starter && starter.n !== sentStarter.current) {
+      sentStarter.current = starter.n;
+      send(starter.text);
+    }
+    // send is stable enough for a one-shot trigger
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, starter]);
+
   const points = useMemo(
     () =>
       (itinerary?.stops ?? [])
@@ -72,10 +84,10 @@ export function Planner({ open, city, sessionId, onClose, onOpenPlace }: Props) 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label="Day planner">
       <button type="button" className="absolute inset-0 bg-ink/70 backdrop-blur-sm" onClick={onClose} aria-label="Close planner" />
-      <aside className="paper-grain relative flex h-full w-full max-w-3xl flex-col bg-river shadow-2xl animate-rise [animation-duration:.45s]">
+      <aside className="relative flex h-full w-full max-w-3xl flex-col border-l border-sand/10 bg-river shadow-2xl animate-rise [animation-duration:.45s]">
         <header className="flex items-center gap-3 border-b border-sand/10 px-5 py-4">
           <div className="min-w-0">
-            <h2 className="font-display text-3xl text-sand">Plan a day in {meta.name}</h2>
+            <h2 className="text-2xl text-sand">Plan a day in {meta.name}</h2>
             <p className="text-sm text-sand-dim">Tell me the mood, the company and the budget. I'll check hours and distances.</p>
           </div>
           {itinerary && (
@@ -83,7 +95,7 @@ export function Planner({ open, city, sessionId, onClose, onOpenPlace }: Props) 
               <RotateCcw className="h-3.5 w-3.5" aria-hidden /> Start over
             </button>
           )}
-          <button type="button" onClick={onClose} className={`${itinerary ? '' : 'ml-auto'} rounded-full p-2 text-sand hover:text-accent`} aria-label="Close">
+          <button type="button" onClick={onClose} className={`${itinerary ? '' : 'ml-auto'} rounded-md p-2 text-sand-dim hover:bg-white/5 hover:text-sand`} aria-label="Close">
             <X className="h-6 w-6" />
           </button>
         </header>
@@ -94,7 +106,7 @@ export function Planner({ open, city, sessionId, onClose, onOpenPlace }: Props) 
               <p className="text-sand/90">Try one of these, or write your own:</p>
               <div className="flex flex-wrap gap-2">
                 {STARTERS[city].map((s) => (
-                  <button key={s} type="button" className="chip hover:border-accent/60 hover:text-accent" onClick={() => send(s)}>
+                  <button key={s} type="button" className="chip" onClick={() => send(s)}>
                     {s}
                   </button>
                 ))}
@@ -106,7 +118,7 @@ export function Planner({ open, city, sessionId, onClose, onOpenPlace }: Props) 
             <ol className="space-y-3" aria-label="Conversation">
               {history.map((m, i) => (
                 <li key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <p className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${m.role === 'user' ? 'bg-accent text-ink' : 'bg-ink/60 text-sand'}`}>{m.content}</p>
+                  <p className={`max-w-[85%] rounded-xl px-4 py-2.5 text-sm ${m.role === 'user' ? 'bg-white/[0.09] text-sand' : 'border border-sand/10 bg-ink/40 text-sand'}`}>{m.content}</p>
                 </li>
               ))}
               {busy === 'plan' && (
@@ -124,7 +136,7 @@ export function Planner({ open, city, sessionId, onClose, onOpenPlace }: Props) 
 
         <form onSubmit={submit} className="border-t border-sand/10 p-4">
           <label htmlFor="planner-input" className="sr-only">Describe your day</label>
-          <div className="flex items-end gap-2 rounded-2xl border border-sand/15 bg-ink/60 p-2 focus-within:border-accent">
+          <div className="flex items-end gap-2 rounded-xl border border-sand/15 bg-ink/60 p-2 focus-within:border-accent/70">
             <textarea
               id="planner-input"
               ref={inputRef}
@@ -162,14 +174,14 @@ function ItineraryView({ it, busy, showMap, setShowMap, points, center, onSwap, 
 }) {
   return (
     <section className="mt-6" aria-label="Itinerary">
-      <div className="rounded-2xl border border-sand/10 bg-ink/40 p-5">
+      <div className="rounded-xl border border-sand/10 bg-ink/40 p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-sm text-accent">{it.date_or_day}</p>
-            <h3 className="font-display text-3xl text-sand">{it.title}</h3>
+            <h3 className="text-2xl text-sand">{it.title}</h3>
             <p className="text-sm text-sand-dim">{it.theme}</p>
           </div>
-          <span className="inline-flex items-center gap-1 rounded-full bg-sand/10 px-2.5 py-1 text-xs text-sand-dim" title="Opening hours and distances are checked in your browser against each stop's listed hours and coordinates">
+          <span className="inline-flex items-center gap-1 rounded-md border border-sand/10 px-2 py-0.5 text-xs text-sand-dim" title="Opening hours and distances are checked in your browser against each stop's listed hours and coordinates">
             <Bot className="h-3.5 w-3.5" aria-hidden /> Hours and distances checked
           </span>
         </div>
@@ -219,10 +231,10 @@ function StopRow({ s, busy, onSwap, onOpenPlace }: { s: ItineraryStop; busy: boo
           <Footprints className="h-3.5 w-3.5" aria-hidden /> {s.travel_from_previous.distance_km} km, {s.travel_from_previous.mode_note.replace(/^~/, 'about ')}
         </p>
       )}
-      <span className="absolute -left-[37px] top-0 grid h-7 w-7 place-items-center rounded-full bg-accent font-display text-sm text-ink" aria-hidden>
+      <span className="absolute -left-[37px] top-0 grid h-7 w-7 place-items-center rounded-full border border-accent/60 bg-ink font-mono text-xs text-accent" aria-hidden>
         {s.stop_index + 1}
       </span>
-      <div className="rounded-2xl border border-sand/10 bg-ink/40 p-4">
+      <div className="rounded-xl border border-sand/10 bg-ink/40 p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <p className="flex items-center gap-1.5 text-sm text-accent">
             <Clock className="h-3.5 w-3.5" aria-hidden /> {s.time_slot} <span className="text-sand-faint">{s.slot_label}</span>
@@ -231,7 +243,7 @@ function StopRow({ s, busy, onSwap, onOpenPlace }: { s: ItineraryStop; busy: boo
             <H.icon className="h-3.5 w-3.5" aria-hidden /> {H.label}
           </span>
         </div>
-        <h4 className="mt-1 font-display text-2xl text-sand">
+        <h4 className="mt-1 text-lg text-sand">
           <button type="button" className="text-left hover:text-accent" onClick={() => onOpenPlace(s.place.id)}>
             {s.place.name}
           </button>

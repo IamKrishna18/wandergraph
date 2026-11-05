@@ -57,7 +57,7 @@ export function Understanding({ interpretation, prefs, onPatch, onReset }: {
       )}
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-sand-dim">Looking for</span>
+          <span className="label mr-1">Looking for</span>
           {chips.map(({ key, label, icon: Icon, patch }) => (
             <button key={key} type="button" className="chip chip-on group" onClick={() => onPatch(patch)} aria-label={`Remove ${label}`}>
               <Icon className="h-3.5 w-3.5" aria-hidden />
@@ -65,7 +65,7 @@ export function Understanding({ interpretation, prefs, onPatch, onReset }: {
               <X className="h-3.5 w-3.5 opacity-60 group-hover:opacity-100" aria-hidden />
             </button>
           ))}
-          <button type="button" onClick={onReset} className="ml-1 inline-flex items-center gap-1 text-sm text-sand-dim underline-offset-4 hover:text-accent hover:underline">
+          <button type="button" onClick={onReset} className="ml-1 inline-flex items-center gap-1 text-sm text-sand-faint underline-offset-4 hover:text-sand hover:underline">
             <RotateCcw className="h-3.5 w-3.5" aria-hidden /> Clear all
           </button>
         </div>
@@ -87,14 +87,14 @@ export function FilterRail({ filters, prefs, onCategory, onCompanion, onBudget }
   return (
     <div className="flex flex-col gap-3">
       <div role="group" aria-label="Category" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-thin lg:mx-0 lg:flex-wrap lg:px-0">
-        <button type="button" className={`chip shrink-0 ${active === null ? 'chip-on' : 'hover:border-accent/50'}`} aria-pressed={active === null} onClick={() => onCategory(null)}>
+        <button type="button" className={`chip shrink-0 ${active === null ? 'chip-on' : ''}`} aria-pressed={active === null} onClick={() => onCategory(null)}>
           Everything
         </button>
         {filters.map((f) => {
           const Icon = GROUP_ICONS[f.id] ?? Sparkles;
           const on = active === f.id;
           return (
-            <button key={f.id} type="button" className={`chip shrink-0 ${on ? 'chip-on' : 'hover:border-accent/50'}`} aria-pressed={on} onClick={() => onCategory(on ? null : f.id)}>
+            <button key={f.id} type="button" className={`chip shrink-0 ${on ? 'chip-on' : ''}`} aria-pressed={on} onClick={() => onCategory(on ? null : f.id)}>
               <Icon className="h-3.5 w-3.5" aria-hidden />
               {f.label}
             </button>
@@ -102,23 +102,23 @@ export function FilterRail({ filters, prefs, onCategory, onCompanion, onBudget }
         })}
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <div role="group" aria-label="Who's coming" className="flex items-center gap-1 rounded-full border border-sand/10 bg-river/60 p-1">
+        <div role="group" aria-label="Who's coming" className="flex items-center gap-0.5 rounded-lg border border-sand/10 bg-white/[0.02] p-0.5">
           {COMPANIONS.map((c) => {
             const on = prefs?.companion_type === c.id;
             return (
               <button key={c.id} type="button" aria-pressed={on} onClick={() => onCompanion(on ? null : c.id)}
-                className={`rounded-full px-3 py-1 text-sm transition-colors ${on ? 'bg-accent text-ink' : 'text-sand-dim hover:text-sand'}`}>
+                className={`rounded-md px-2.5 py-1 text-sm transition-colors ${on ? 'bg-white/[0.09] text-sand' : 'text-sand-faint hover:text-sand'}`}>
                 {c.label}
               </button>
             );
           })}
         </div>
-        <div role="group" aria-label="Budget per person" className="flex items-center gap-1 rounded-full border border-sand/10 bg-river/60 p-1">
+        <div role="group" aria-label="Budget per person" className="flex items-center gap-0.5 rounded-lg border border-sand/10 bg-white/[0.02] p-0.5">
           {CITY_META[city].budgetTiers.map((b) => {
             const on = prefs?.budget_max === b;
             return (
               <button key={b} type="button" aria-pressed={on} onClick={() => onBudget(on ? null : b)}
-                className={`rounded-full px-3 py-1 text-sm transition-colors ${on ? 'bg-accent text-ink' : 'text-sand-dim hover:text-sand'}`}>
+                className={`rounded-md px-2.5 py-1 text-sm transition-colors ${on ? 'bg-white/[0.09] text-sand' : 'text-sand-faint hover:text-sand'}`}>
                 {b === 0 ? 'Free' : `≤ ${money(b, sym)}`}
               </button>
             );

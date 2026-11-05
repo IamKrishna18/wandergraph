@@ -2,166 +2,210 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Two elements, one app. Fire leads with ember + saffron, Water with jal teal + moonlit blue. */
-:root,
-[data-element='fire'] {
-  --accent: 245 166 35; /* saffron */
-  --accent-2: 210 56 30; /* ember */
-  --glow: 245 120 35;
-  --sky-top: #2a0f0a;
-  --sky-mid: #5c1d0e;
-  --duotone: rgba(210, 56, 30, 0.35);
-}
-[data-element='water'] {
-  --accent: 35 165 160; /* jal */
-  --accent-2: 96 165 250; /* moonlit blue */
-  --glow: 35 165 160;
-  --sky-top: #061a2a;
-  --sky-mid: #0b3a4f;
-  --duotone: rgba(35, 120, 160, 0.38);
-}
-
 @layer base {
   html {
-    background: #08111f;
+    background: #09090b;
     color-scheme: dark;
+    scroll-behavior: smooth;
   }
   body {
     @apply bg-ink font-body text-sand antialiased;
     min-height: 100vh;
     font-size: 16px;
     line-height: 1.55;
+    font-feature-settings: 'ss01', 'cv11';
   }
   ::selection {
-    background: rgb(var(--accent) / 0.85);
-    color: #08111f;
+    background: rgba(255, 106, 61, 0.9);
+    color: #09090b;
   }
   :focus-visible {
-    outline: 2px solid rgb(var(--accent));
+    outline: 2px solid #ff6a3d;
     outline-offset: 2px;
     border-radius: 6px;
   }
   h1,
   h2,
-  h3 {
+  h3,
+  h4 {
     @apply font-display;
-    letter-spacing: 0.005em;
-    line-height: 1.05;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.08;
   }
 }
 
 @layer components {
-  .paper-grain {
-    position: relative;
-  }
-  .paper-grain::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    opacity: 0.09;
-    mix-blend-mode: overlay;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  }
-
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-[background-color,border-color,color,transform] duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  /* white primary, the main action on a surface */
+  .btn-primary {
+    @apply btn bg-sand text-ink hover:bg-white;
   }
   .btn-accent {
-    @apply btn bg-accent text-ink hover:bg-accent/90;
+    @apply btn bg-accent text-ink hover:bg-[#ff7d55];
   }
   .btn-ghost {
-    @apply btn border border-sand/15 text-sand hover:border-accent/60 hover:text-accent;
+    @apply btn border border-sand/[0.12] bg-white/[0.02] text-sand hover:border-sand/30 hover:bg-white/[0.05];
   }
   .chip {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-sand/15 bg-river/70 px-3 py-1 text-sm text-sand transition-colors;
+    @apply inline-flex items-center gap-1.5 rounded-md border border-sand/10 bg-white/[0.03] px-2.5 py-1 text-sm text-sand-dim transition-colors hover:border-sand/25 hover:text-sand;
   }
   .chip-on {
-    @apply border-accent bg-accent/15 text-accent;
+    @apply border-accent/50 bg-accent/10 text-accent hover:border-accent hover:text-accent;
   }
   .panel {
-    @apply rounded-2xl border border-sand/10 bg-river/80 backdrop-blur;
+    @apply rounded-xl border border-sand/10 bg-river;
   }
   .field {
-    @apply w-full rounded-xl border border-sand/15 bg-ink/60 px-4 py-3 text-sand placeholder:text-sand-faint focus:border-accent focus:outline-none;
+    @apply w-full rounded-lg border border-sand/[0.12] bg-ink px-4 py-3 text-sand placeholder:text-sand-faint focus:border-accent/70 focus:outline-none;
   }
-  .duotone {
-    position: relative;
-    isolation: isolate;
+  /* small uppercase monospace label, used for section numbers and meta */
+  .label {
+    @apply font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-sand-faint;
   }
-  .duotone::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, transparent 35%, rgba(8, 17, 31, 0.92)), var(--duotone);
-    mix-blend-mode: multiply;
-    pointer-events: none;
+  .kbd {
+    @apply inline-grid h-5 min-w-[20px] place-items-center rounded border border-sand/15 bg-white/[0.04] px-1 font-mono text-[11px] text-sand-dim;
   }
   .skeleton {
-    background: linear-gradient(90deg, rgba(235, 221, 191, 0.04), rgba(235, 221, 191, 0.1), rgba(235, 221, 191, 0.04));
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
     background-size: 800px 100%;
     @apply animate-shimmer;
   }
 }
 
-/* Sun-ray burst behind the hero title, a nod to hand-painted cinema hoardings */
-.rays {
-  background: repeating-conic-gradient(from 0deg at 50% 100%, rgb(var(--glow) / 0.2) 0deg 4deg, transparent 4deg 11deg);
-  mask-image: radial-gradient(ellipse at 50% 100%, black 15%, transparent 68%);
-  -webkit-mask-image: radial-gradient(ellipse at 50% 100%, black 15%, transparent 68%);
+/* Faint engineering grid that fades out from the centre */
+.grid-bg {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 30%, transparent 75%);
+}
+.dot-bg {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.09) 1px, transparent 1px);
+  background-size: 18px 18px;
 }
 
-.element-wipe {
-  transition: background 0.9s ease, color 0.6s ease, border-color 0.6s ease;
+/* Cursor spotlight on cards: --x / --y are set from pointer position */
+.spot {
+  position: relative;
+  isolation: isolate;
+}
+.spot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  background: radial-gradient(420px circle at var(--x, 50%) var(--y, 50%), rgba(255, 106, 61, 0.09), transparent 45%);
+}
+.spot:hover::before {
+  opacity: 1;
+}
+.spot > * {
+  position: relative;
+  z-index: 1;
 }
 
-/* Leaflet dark skin */
+/* Scroll reveal; only hides content when JS has confirmed it can reveal it again */
+.reveal-on .reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.8s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition-delay: var(--d, 0ms);
+}
+.reveal-on .reveal.in {
+  opacity: 1;
+  transform: none;
+}
+
+.marquee-mask {
+  mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+}
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+/* Text that brightens left to right */
+.text-sheen {
+  background: linear-gradient(180deg, #ffffff 0%, #b9b9c2 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Leaflet, dark */
 .leaflet-container {
-  background-color: #0b1626;
-  background-image: linear-gradient(rgba(235, 221, 191, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(235, 221, 191, 0.04) 1px, transparent 1px);
-  background-size: 48px 48px;
-  font-family: 'Hind Guntur', system-ui, sans-serif;
+  background-color: #0e0e11;
+  font-family: 'Geist Variable', system-ui, sans-serif;
 }
 .leaflet-control-attribution {
-  background: rgba(8, 17, 31, 0.75) !important;
-  color: #b9ac90 !important;
+  background: rgba(9, 9, 11, 0.8) !important;
+  color: #80808a !important;
   font-size: 10px;
 }
 .leaflet-control-attribution a {
-  color: #ebddbf !important;
+  color: #ededef !important;
 }
 .leaflet-bar a {
-  background: #0f1d33 !important;
-  color: #ebddbf !important;
-  border-color: rgba(235, 221, 191, 0.15) !important;
+  background: #18181c !important;
+  color: #ededef !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
 }
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
-  background: #0f1d33;
-  color: #ebddbf;
+  background: #18181c;
+  color: #ededef;
 }
 .wg-pin {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 50% 50% 50% 6px;
-  transform: rotate(-45deg);
-  background: rgb(var(--accent));
-  color: #08111f;
-  font-weight: 700;
-  font-size: 13px;
-  box-shadow: 0 0 0 3px rgba(8, 17, 31, 0.8), 0 0 18px rgb(var(--glow) / 0.55);
-}
-.wg-pin span {
-  transform: rotate(45deg);
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #ff6a3d;
+  color: #09090b;
+  font-family: 'Geist Mono Variable', monospace;
+  font-weight: 600;
+  font-size: 12px;
+  box-shadow: 0 0 0 3px rgba(9, 9, 11, 0.9), 0 0 0 4px rgba(255, 106, 61, 0.45);
 }
 .wg-pin.dim {
-  background: #ebddbf;
-  box-shadow: 0 0 0 3px rgba(8, 17, 31, 0.8);
+  background: #ededef;
+  box-shadow: 0 0 0 3px rgba(9, 9, 11, 0.9);
+}
+.wg-area-label {
+  background: rgba(9, 9, 11, 0.85);
+  color: #ededef;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+  font-weight: 500;
+}
+.wg-area-label::before {
+  display: none;
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
   *,
   *::before,
   *::after {
@@ -169,20 +213,4 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
-}
-
-.scrollbar-thin {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(235, 221, 191, 0.2) transparent;
-}
-
-.wg-area-label {
-  background: rgba(8, 17, 31, 0.8);
-  color: #f1e6cc;
-  border: none;
-  box-shadow: none;
-  font-weight: 600;
-}
-.wg-area-label::before {
-  display: none;
 }

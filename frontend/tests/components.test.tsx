@@ -3,8 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveApiBase, photoUrl } from '../src/api';
 import { constraintChips, Understanding } from '../src/components/Controls';
 import { PlaceCard } from '../src/components/PlaceCard';
-import { ElementToggle } from '../src/components/TopBar';
-import { ElementContext, useElementState } from '../src/hooks';
 import { Planner } from '../src/components/Planner';
 import { place, prefs, rec } from './fixtures';
 import recorded from './api-recorded.json';
@@ -82,15 +80,6 @@ describe('PlaceCard', () => {
   });
 });
 
-function ThemeHarness() {
-  const s = useElementState();
-  return (
-    <ElementContext.Provider value={s}>
-      <ElementToggle />
-    </ElementContext.Provider>
-  );
-}
-
 describe('Locality results', () => {
   it('shows distance from the searched area and unmet location honestly', () => {
     const r = rec({
@@ -102,17 +91,6 @@ describe('Locality results', () => {
     expect(screen.getByText(/3\.4 km from Uppal/, { selector: 'span.text-saffron' })).toBeInTheDocument();
     expect(screen.getByText('Matches 0 of 1')).toBeInTheDocument();
     expect(screen.getByText('No:')).toBeInTheDocument();
-  });
-});
-
-describe('Fire / Water toggle', () => {
-  it('switches the document theme', () => {
-    render(<ThemeHarness />);
-    const sw = screen.getByRole('switch');
-    expect(document.documentElement.dataset.element).toBe('fire');
-    fireEvent.click(sw);
-    expect(document.documentElement.dataset.element).toBe('water');
-    expect(sw).toHaveAttribute('aria-checked', 'true');
   });
 });
 

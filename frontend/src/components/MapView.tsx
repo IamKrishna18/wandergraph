@@ -22,6 +22,8 @@ interface Props {
 }
 
 /** Dark Leaflet map with numbered pins; optional route line in visiting order. */
+const ACCENT = '#FF6A3D';
+
 export function MapView({ points, center, area, route = false, onSelect, className = '', ariaLabel }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
@@ -53,17 +55,16 @@ export function MapView({ points, center, area, route = false, onSelect, classNa
     lg.clearLayers();
     const latlngs: L.LatLngExpression[] = [];
     for (const p of points) {
-      const icon = L.divIcon({ className: '', html: `<div class="wg-pin${p.dim ? ' dim' : ''}"><span>${p.label}</span></div>`, iconSize: [30, 30], iconAnchor: [15, 30] });
+      const icon = L.divIcon({ className: '', html: `<div class="wg-pin${p.dim ? ' dim' : ''}"><span>${p.label}</span></div>`, iconSize: [28, 28], iconAnchor: [14, 14] });
       const marker = L.marker([p.lat, p.lng], { icon, title: p.title, keyboard: true, alt: p.title }).addTo(lg);
-      marker.bindTooltip(p.title, { direction: 'top', offset: [0, -28] });
+      marker.bindTooltip(p.title, { direction: 'top', offset: [0, -14] });
       marker.on('click', () => select.current?.(p.id));
       latlngs.push([p.lat, p.lng]);
     }
     if (area) {
-      const acc0 = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
       L.circle([area.latitude, area.longitude], {
         radius: area.radius_km * 1000,
-        color: acc0 ? `rgb(${acc0.split(/\s+/).join(',')})` : '#F5A623',
+        color: ACCENT,
         weight: 2,
         fillOpacity: 0.08,
         dashArray: '4 6',
@@ -73,14 +74,12 @@ export function MapView({ points, center, area, route = false, onSelect, classNa
       latlngs.push([area.latitude, area.longitude]);
     }
     if (route && latlngs.length > 1) {
-      const acc = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-      const color = acc ? `rgb(${acc.split(/\s+/).join(',')})` : '#F5A623';
-      L.polyline(latlngs, { color, weight: 3, dashArray: '6 8', opacity: 0.9 }).addTo(lg);
+      L.polyline(latlngs, { color: ACCENT, weight: 2.5, dashArray: '6 8', opacity: 0.9 }).addTo(lg);
     }
     if (latlngs.length) m.fitBounds(L.latLngBounds(latlngs as L.LatLngTuple[]).pad(0.25), { maxZoom: 15 });
     else m.setView(center, 12);
     setTimeout(() => m.invalidateSize(), 50);
   }, [points, route, center, area]);
 
-  return <div ref={el} role="region" aria-label={ariaLabel} className={`overflow-hidden rounded-2xl border border-sand/10 ${className}`} />;
+  return <div ref={el} role="region" aria-label={ariaLabel} className={`overflow-hidden rounded-xl border border-sand/10 ${className}`} />;
 }

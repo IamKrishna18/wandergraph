@@ -51,7 +51,7 @@ export function FitChips({ fit, max = 5 }: { fit: FitItem[]; max?: number }) {
 export function FitTable({ fit }: { fit: FitItem[] }) {
   if (!fit.length) return null;
   return (
-    <div className="overflow-x-auto rounded-2xl border border-sand/15">
+    <div className="overflow-x-auto rounded-xl border border-sand/15">
       <table className="w-full min-w-[420px] text-left text-sm">
         <thead className="bg-ink/50 text-xs text-sand-dim">
           <tr>

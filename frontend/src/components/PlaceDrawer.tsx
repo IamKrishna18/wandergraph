@@ -61,14 +61,14 @@ export function PlaceDrawer({ placeId, match, localityName, city, onClose, onOpe
   return (
     <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={p ? p.name : 'Place details'}>
       <button type="button" className="absolute inset-0 bg-ink/70 backdrop-blur-sm" onClick={onClose} aria-label="Close details" />
-      <aside className="relative flex h-full w-full max-w-xl flex-col overflow-y-auto bg-river shadow-2xl scrollbar-thin animate-rise [animation-duration:.45s]">
-        <button type="button" onClick={onClose} className="absolute right-4 top-4 z-10 rounded-full bg-ink/70 p-2 text-sand hover:text-accent" aria-label="Close">
+      <aside className="relative flex h-full w-full max-w-xl flex-col overflow-y-auto border-l border-sand/10 bg-river shadow-2xl scrollbar-thin animate-rise [animation-duration:.45s]">
+        <button type="button" onClick={onClose} className="absolute right-4 top-4 z-10 rounded-md bg-ink/70 p-2 text-sand hover:text-sand" aria-label="Close">
           <X className="h-5 w-5" />
         </button>
 
         {!p && !error && (
           <div className="space-y-4 p-6" aria-busy="true">
-            <div className="skeleton aspect-[16/9] rounded-2xl" />
+            <div className="skeleton aspect-[16/9] rounded-xl" />
             <div className="skeleton h-8 w-2/3 rounded" />
             <div className="skeleton h-4 w-1/2 rounded" />
           </div>
@@ -77,15 +77,16 @@ export function PlaceDrawer({ placeId, match, localityName, city, onClose, onOpe
 
         {p && (
           <>
-            <div className="duotone aspect-[16/9] shrink-0 bg-ink">
+            <div className="relative aspect-[16/9] shrink-0 bg-ink">
               {photo?.proxy_url && (
                 <img src={photoUrl(photo.proxy_url)} alt="" className="h-full w-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
               )}
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-river via-river/50 to-transparent" aria-hidden />
             </div>
             <div className="-mt-16 space-y-6 p-6 pt-0">
               <div className="relative">
-                <p className="text-sm text-accent">{p.groups.map((x) => GROUP_LABELS[x] ?? x).join(', ') || 'Place'}</p>
-                <h2 className="font-display text-4xl text-sand">{p.name}</h2>
+                <p className="label text-accent">{p.groups.map((x) => GROUP_LABELS[x] ?? x).join(', ') || 'Place'}</p>
+                <h2 className="text-3xl text-sand">{p.name}</h2>
                 {p.formatted_address && (
                   <p className="mt-1 flex items-start gap-1.5 text-sm text-sand-dim">
                     <MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
@@ -109,7 +110,7 @@ export function PlaceDrawer({ placeId, match, localityName, city, onClose, onOpe
               {match && match.fit.length > 0 && (
                 <section aria-labelledby="fit-h">
                   <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-                    <h3 id="fit-h" className="font-body text-lg font-semibold text-sand">How it fits your search</h3>
+                    <h3 id="fit-h" className="text-lg text-sand">How it fits your search</h3>
                     <span className="text-sm text-accent">{fitSummary(match.fit)}</span>
                   </div>
                   <FitTable fit={match.fit} />

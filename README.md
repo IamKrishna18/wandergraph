@@ -22,7 +22,7 @@ Type something like **"peaceful parks in Uppal"**, **"romantic cafes in Banjara 
 2. **Stays where you asked.** Results are limited to the area you named. If nothing there fits, it says so plainly and shows the closest matches elsewhere in the city, each with its distance.
 3. **Shows why each place is listed.** Every result has a checklist: *location ✓, type ✓, mood ✓, budget ?*. It also says where each fact came from: Google, the curated data, or unknown.
 4. **Plans a day.** Ask for "a full day of Nizami heritage". You get a timed route with travel distances, warnings for stops that are closed at their planned time, and one-click swaps.
-5. **Lets you explore the graph.** Every city is a knowledge graph of places, areas, categories, moods and companions that you can click through.
+5. **Lets you explore the graph.** Every city is a knowledge graph laid out in rings: the city in the centre, then its neighbourhoods, their places, and what describes those places on the outer ring. Hover a node to trace its links, or click it to see everything it connects to.
 
 ## Screenshots
 
@@ -57,7 +57,9 @@ Type something like **"peaceful parks in Uppal"**, **"romantic cafes in Banjara 
 - Uses Google Gemini when `GEMINI_API_KEY` is set, and falls back to a rule-based planner otherwise.
 
 **Design**
-- A "fire & water" theme with an animated ember/ripple hero. Toggle between fire (dark, saffron) and water (teal).
+- A dark, minimal interface in Geist and Geist Mono, with one warm accent colour.
+- The hero reads your search as you type: each part (area, type, mood, company, budget, time) is highlighted and linked to the city on a small live diagram. When the box is empty it types out example searches.
+- Cards light up under the cursor and show a fit bar with one segment per thing you asked for. Sections fade in as you scroll, the refine bar follows you through the results, and `/` or `Ctrl/⌘ K` jumps to the search box.
 - Works on phones and is keyboard-friendly, with focus states, ARIA labels and reduced-motion support.
 
 ## How it works
@@ -144,7 +146,7 @@ docker compose up --build
 
 ```bash
 cd backend  && python -m pytest -q     # 24 tests
-cd frontend && npm test                # 33 tests
+cd frontend && npm test                # 37 tests
 ```
 The frontend tests replay responses recorded from the real backend (`frontend/tests/api-recorded.json`). They cover area handling, typo corrections, chip removal, following a city named in the text, price clean-up and the planner's hours checks.
 
@@ -164,7 +166,7 @@ wandergraph/
 │   │   ├── adapter.ts      # area check, fit table, price & hours checks
 │   │   ├── api.ts          # typed API client
 │   │   ├── hooks.ts        # search and planner state
-│   │   └── components/     # Hero, PlaceCard, PlaceDrawer, Planner, GraphOverlay, MapView…
+│   │   └── components/     # Hero, PlaceCard, PlaceDrawer, Planner, GraphExplorer, MapView…
 │   └── tests/
 ├── docs/                   # architecture, API, data sources, data policy
 └── vercel.json · render.yaml · docker-compose.yml
